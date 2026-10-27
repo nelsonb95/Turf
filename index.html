@@ -1,0 +1,951 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Turf">
+<meta name="theme-color" content="#F2F2F7" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
+<title>Turf</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
+<style>
+/* Layout: single phone column, iOS grouped-list cards, fixed bottom tab bar, satellite map cards */
+:root{
+  --bg:#F2F2F7; --card:#FFFFFF; --fg:#1C1C1E; --fg2:#3C3C43; --muted:#6C6C70; --sep:#E3E3E8; --fill:#EFEFF4;
+  --accent:#248A3D; --on-accent:#FFFFFF; --accent-soft:#E3F5E8; --accent-ink:#1E6B32;
+  --blue:#0062CC; --blue-soft:#E6F0FF; --warn:#9A4700; --warn-soft:#FFF1E0; --danger:#C4281C;
+  --tab:rgba(249,249,249,0.94);
+  --font:-apple-system,"SF Pro Text","Helvetica Neue",system-ui,sans-serif;
+  --display:-apple-system,"SF Pro Display","Helvetica Neue",system-ui,sans-serif;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){:root{
+  --bg:#000000; --card:#1C1C1E; --fg:#F2F2F7; --fg2:#D1D1D6; --muted:#98989F; --sep:#38383A; --fill:#2C2C2E;
+  --accent:#30D158; --on-accent:#04210D; --accent-soft:#16351F; --accent-ink:#7EE29A;
+  --blue:#4DA3FF; --blue-soft:#132A45; --warn:#FFB340; --warn-soft:#3A2810; --danger:#FF6B5E;
+  --tab:rgba(22,22,24,0.94); color-scheme:dark;
+}}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--fg);font-family:var(--font);font-size:16px;line-height:1.35;-webkit-text-size-adjust:100%;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
+  padding-bottom:calc(96px + env(safe-area-inset-bottom,0px))}
+main{max-width:600px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+header.top{padding-top:16px;display:flex;justify-content:space-between;align-items:flex-end;gap:12px}
+.eyebrow{font-size:13px;font-weight:600;color:var(--muted);letter-spacing:.3px;text-transform:uppercase;overflow-wrap:anywhere}
+h1{margin:2px 0 0;font-family:var(--display);font-size:34px;font-weight:700;letter-spacing:-.5px;text-wrap:balance}
+h2{margin:0;font-size:17px;font-weight:600}
+.sect{margin:6px 4px -8px;font-size:13px;font-weight:600;color:var(--muted);letter-spacing:.3px;text-transform:uppercase}
+.save{font-size:12px;color:var(--muted);text-align:center;min-height:16px}
+.card{background:var(--card);border-radius:16px;padding:16px;display:flex;flex-direction:column;gap:12px;min-width:0}
+.card.list{padding:0 16px;gap:0}
+.card.tight{padding:12px}
+.row{display:flex;align-items:center;gap:12px;min-width:0}
+.row.between{justify-content:space-between}
+.grow{flex:1;min-width:0}
+.item{display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--sep);min-width:0}
+.card.list .item:last-child{border-bottom:none}
+.title{font-size:16px;font-weight:500}
+.sub{font-size:13px;color:var(--muted)}
+.body{font-size:15px;color:var(--fg2);line-height:1.45;margin:0}
+.big{font-family:var(--display);font-size:34px;font-weight:600;letter-spacing:-.5px;font-variant-numeric:tabular-nums}
+.num{font-variant-numeric:tabular-nums}
+.badge{width:32px;height:32px;border-radius:16px;background:var(--blue-soft);color:var(--blue);font-weight:700;font-size:15px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.swatch{width:14px;height:14px;border-radius:4px;flex-shrink:0}
+.pill{font-size:12px;font-weight:600;padding:4px 9px;border-radius:12px;white-space:nowrap;flex-shrink:0}
+.pill.now{background:var(--accent-soft);color:var(--accent-ink)}
+.pill.soon{background:var(--warn-soft);color:var(--warn)}
+.pill.later,.pill.missed{background:var(--fill);color:var(--muted)}
+.pill.done{background:var(--accent-soft);color:var(--accent-ink)}
+.alert{display:flex;gap:10px;align-items:flex-start;padding:12px;border-radius:12px;background:var(--warn-soft);color:var(--warn)}
+.alert.info{background:var(--blue-soft);color:var(--blue)}
+.alert.good{background:var(--accent-soft);color:var(--accent-ink)}
+.alert b{display:block;font-size:15px}
+.alert span{font-size:14px;color:var(--fg2)}
+.alert svg{flex-shrink:0;margin-top:1px}
+.bar{height:10px;border-radius:5px;background:var(--fill);display:flex;overflow:hidden}
+.bar i{display:block;height:100%}
+.legend{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:12px;color:var(--fg2)}
+.legend span{display:flex;align-items:center;gap:6px}
+.legend i{width:10px;height:10px;border-radius:3px;display:inline-block}
+.stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.stat{background:var(--card);border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:2px;min-width:0}
+.stat .k{font-size:12px;font-weight:600;color:var(--muted);letter-spacing:.2px;text-transform:uppercase}
+.stat .v{font-family:var(--display);font-size:22px;font-weight:600;font-variant-numeric:tabular-nums}
+.stat.hi .v{color:var(--accent)}
+button,.btn{font:inherit;font-size:15px;font-weight:600;border:none;border-radius:12px;min-height:44px;padding:0 16px;cursor:pointer;
+  display:inline-flex;align-items:center;justify-content:center;gap:6px;background:var(--fill);color:var(--fg);text-decoration:none}
+button.primary,.btn.primary{background:var(--accent);color:var(--on-accent)}
+button.blue{background:var(--blue-soft);color:var(--blue)}
+button.danger{background:transparent;color:var(--danger)}
+button.link,a.link{background:transparent;color:var(--blue);padding:0 4px;min-height:44px;font-weight:600;text-decoration:none;display:inline-flex;align-items:center}
+button.small{min-height:36px;font-size:14px;padding:0 12px;border-radius:10px}
+button.wide{width:100%}
+button:disabled{opacity:.45;cursor:default}
+button:focus-visible,input:focus-visible,select:focus-visible,label.btn:focus-within,a:focus-visible{outline:3px solid var(--blue);outline-offset:2px}
+.btns{display:flex;flex-wrap:wrap;gap:8px}
+.btns > *{flex:1 1 auto}
+label.f{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--muted);font-weight:500;min-width:0}
+input,select{font:inherit;font-size:16px;color:var(--fg);background:var(--fill);border:1px solid transparent;border-radius:10px;min-height:44px;padding:0 12px;width:100%;min-width:0}
+input[type=checkbox],input[type=radio]{width:24px;height:24px;min-height:0;accent-color:var(--accent);flex-shrink:0;margin:0}
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.seg{display:flex;padding:2px;border-radius:10px;background:var(--fill);gap:2px}
+.seg button{flex:1;min-height:36px;border-radius:8px;background:transparent;font-size:13px;font-weight:600;padding:0 6px;color:var(--fg)}
+.seg button[aria-pressed="true"]{background:var(--card);box-shadow:0 1px 2px rgba(0,0,0,.15)}
+.check{display:flex;align-items:center;gap:12px;min-height:44px;cursor:pointer}
+.hint{font-size:13px;color:var(--muted);line-height:1.4;margin:0}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.mapbox{width:100%;height:46vh;min-height:280px;border-radius:12px;overflow:hidden;background:#2b3326}
+.mapbox.tall{height:60vh;height:calc(100dvh - 300px);min-height:320px}
+.edbar{display:flex;align-items:center;gap:8px}
+.live{flex:1;font-weight:700;font-variant-numeric:tabular-nums}
+.steps{display:flex;gap:6px}
+.steps i{flex:1;height:4px;border-radius:2px;background:var(--sep)}
+.steps i.on{background:var(--accent)}
+.bullets{display:flex;flex-direction:column;gap:16px;margin:0;padding:0;list-style:none}
+.bullets li{display:flex;gap:14px;align-items:flex-start}
+.bullets .n{width:28px;height:28px;border-radius:14px;background:var(--accent-soft);color:var(--accent-ink);font-weight:700;font-size:14px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.kinds{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.kinds button{font-size:13px;min-height:40px;padding:0 8px}
+.result{width:100%;text-align:left;justify-content:flex-start;background:none;border-radius:0;padding:12px 0;border-bottom:1px solid var(--sep);font-weight:500;min-height:0}
+.result:last-child{border-bottom:none}
+nav.tabs{position:fixed;left:0;right:0;bottom:0;z-index:1000;background:var(--tab);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
+  border-top:1px solid var(--sep);display:flex;justify-content:space-around;
+  padding:6px max(8px,env(safe-area-inset-right,0px)) calc(6px + env(safe-area-inset-bottom,0px)) max(8px,env(safe-area-inset-left,0px))}
+nav.tabs a{display:flex;flex-direction:column;align-items:center;gap:2px;min-width:64px;min-height:48px;justify-content:center;text-decoration:none;color:var(--muted);font-size:10px;font-weight:600}
+nav.tabs a[aria-current="page"]{color:var(--accent)}
+/* map markers */
+.turf-icon{background:none;border:none}
+.vtxw{width:100%;height:100%;display:flex;align-items:center;justify-content:center}
+.vtx{display:block;border-radius:50%;background:#fff;border:3px solid #FFD60A;box-shadow:0 1px 4px rgba(0,0,0,.5)}
+.mid{display:flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;background:rgba(255,255,255,.85);color:#1C1C1E;font:700 16px/1 -apple-system,system-ui,sans-serif;box-shadow:0 1px 3px rgba(0,0,0,.4)}
+.sprm{display:flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:50%;color:#fff;border:2px solid #fff;font:700 13px/1 -apple-system,system-ui,sans-serif;box-shadow:0 1px 4px rgba(0,0,0,.5)}
+.pin{display:block;width:14px;height:14px;border-radius:50%;background:#FF375F;border:3px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.5)}
+.leaflet-container{font-family:var(--font)}
+@media (prefers-reduced-motion: reduce){*{transition:none!important;scroll-behavior:auto!important}}
+</style>
+</head>
+<body>
+<main id="app">
+  <section class="card" style="margin-top:40px">
+    <h2>Open Turf in Safari or Chrome</h2>
+    <p class="body">Turf is a web app. It doesn't run inside file previews (the Files app, Quick Look, or a chat app's preview) because those block the scripts and satellite maps it needs.</p>
+    <p class="body">Put this file on a web link and open the link in Safari. On iPhone, tap Share, then Add to Home Screen, and it opens like an app.</p>
+  </section>
+</main>
+<nav class="tabs" id="tabs" aria-label="Sections" hidden>
+  <a href="#today" data-tab="today"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>Today</a>
+  <a href="#water" data-tab="water"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3s6 6.5 6 11a6 6 0 0 1-12 0c0-4.5 6-11 6-11z"/></svg>Water</a>
+  <a href="#calendar" data-tab="calendar"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg>Calendar</a>
+  <a href="#yard" data-tab="yard"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 4L3 6.5v13.5l6-2.5 6 2.5 6-2.5V4l-6 2.5z"/><path d="M9 4v13.5M15 6.5V20"/></svg>Yard</a>
+</nav>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+<script>
+(function(){
+"use strict";
+const $=s=>document.querySelector(s);
+if(!window.L){
+  $("#app").innerHTML='<section class="card" style="margin-top:40px"><h2>The map didn\'t load</h2><p class="body">If you opened this file inside a preview (the Files app, Quick Look, or a chat app), it can\'t reach the map. Open Turf from a web link in Safari or Chrome instead.</p><p class="body">If you\'re already in a browser, check your internet connection and reload.</p></section>';
+  return;
+}
+
+/* ---------- constants ---------- */
+const FT=3.28084, M_PER_FT=0.3048, KEY="turf-v2";
+const ESRI="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
+const MON=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+const WD=["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+const COOL_NEED=[0,0,0.5,0.75,1.0,1.25,1.5,1.25,1.0,0.75,0.5,0];
+const WARM_NEED=[0,0,0,0.5,1.0,1.25,1.5,1.25,1.0,0.5,0,0];
+const SEED_DAILY=0.15;
+const GRASS={
+  fescue:{name:"Tall fescue",warm:false,seed:5,detail:"Cool-season. The most common lawn in Kentucky and the transition zone."},
+  kbg:{name:"Kentucky bluegrass",warm:false,seed:2,detail:"Cool-season. Soft and dark green, spreads to fill gaps."},
+  bermuda:{name:"Bermuda",warm:true,seed:1,detail:"Warm-season. Tan in winter, loves full sun."},
+  zoysia:{name:"Zoysia",warm:true,seed:null,detail:"Warm-season. Dense and slow-growing, tan in winter."}
+};
+const STYPES={
+  oscillating:{name:"Oscillating",shape:"rect",rate:0.30},
+  impact:{name:"Impact",shape:"circle",rate:0.20},
+  stationary:{name:"Stationary spray",shape:"circle",rate:0.50},
+  soaker:{name:"Soaker hose",shape:"none",rate:0.60}
+};
+const VALVES=["A","B","C","D","E","F"];
+const FEATURES={
+  house:{label:"House",color:"#FF9F0A"},driveway:{label:"Driveway",color:"#AEAEB2"},patio:{label:"Patio or deck",color:"#BF5AF2"},
+  bed:{label:"Garden bed",color:"#C08A4E"},pool:{label:"Pool",color:"#64D2FF"},other:{label:"Other",color:"#FF375F"}
+};
+const TASKS_COOL=[
+  {id:"blade",title:"Sharpen mower blade",why:"Clean cuts heal faster and brown less.",start:"02-01",end:"02-28"},
+  {id:"soiltest",title:"Soil test",why:"Lime if pH is under 6.0. Extension offices run them cheaply.",start:"02-15",end:"03-31"},
+  {id:"pre",title:"Crabgrass pre-emergent",why:"When soil holds 55°F for 3 days, about when forsythia blooms. Skip spots you'll seed this spring.",start:"03-15",end:"04-15"},
+  {id:"timeron",title:"Reconnect hose timer",dyn:"on",why:"After your last frost date."},
+  {id:"springfert",title:"Light spring fertilizer",why:"About 0.5 lb nitrogen per 1,000 sq ft. Fall feeding matters more.",start:"04-15",end:"05-15"},
+  {id:"weedspring",title:"Broadleaf weed control",why:"Spot spray dandelions and clover while they're growing.",start:"04-20",end:"05-31"},
+  {id:"grub",title:"Grub preventer",why:"Apply before beetles lay eggs in early summer.",start:"05-15",end:"06-30"},
+  {id:"mowhigh",title:"Raise mower to 4 in",why:"Taller grass shades roots through summer heat.",start:"06-01",end:"06-15"},
+  {id:"aerate",title:"Core aerate",why:"Do it right before overseeding.",start:"09-01",end:"09-30"},
+  {id:"seed",title:"Overseed",why:"Best when soil is 50 to 65°F. Keep seed moist daily for 2 to 3 weeks.",start:"09-01",end:"10-10"},
+  {id:"fallfert",title:"Fall fertilizer",why:"About 1 lb nitrogen per 1,000 sq ft. Starter fertilizer if seeding.",start:"09-01",end:"09-20"},
+  {id:"weedfall",title:"Broadleaf weed control",why:"Fall is the most effective time. Wait 4 mowings after seeding.",start:"10-01",end:"10-31"},
+  {id:"leaves",title:"Mulch-mow leaves",why:"Don't let leaves mat down on the grass.",start:"10-15",end:"11-30"},
+  {id:"timeroff",title:"Bring in timer and hoses",dyn:"off",why:"A hard freeze can crack valves and split hoses."},
+  {id:"winterizer",title:"Winterizer fertilizer",why:"About 1 lb nitrogen per 1,000 sq ft while grass is still green.",start:"11-01",end:"11-30"},
+  {id:"lastmow",title:"Final mow at 3 in",why:"Once growth stops.",start:"11-10",end:"11-30"}
+];
+const TASKS_WARM=[
+  {id:"blade",title:"Sharpen mower blade",why:"Clean cuts heal faster and brown less.",start:"02-01",end:"02-28"},
+  {id:"soiltest",title:"Soil test",why:"Lime if pH is under 6.0.",start:"02-15",end:"03-31"},
+  {id:"pre",title:"Crabgrass pre-emergent",why:"When soil holds 55°F for 3 days.",start:"03-01",end:"03-31"},
+  {id:"timeron",title:"Reconnect hose timer",dyn:"on",why:"After your last frost date."},
+  {id:"scalp",title:"Scalp at green-up",why:"Mow low once to clear dead growth and warm the soil.",start:"04-01",end:"04-30"},
+  {id:"fert1",title:"First fertilizer",why:"After the lawn is fully green, not before.",start:"05-01",end:"05-31"},
+  {id:"grub",title:"Grub preventer",why:"Apply before beetles lay eggs.",start:"05-15",end:"06-30"},
+  {id:"seed",title:"Seed or plug bare spots",why:"Needs soil above 65°F. Zoysia spreads best from plugs or sod.",start:"05-15",end:"07-15"},
+  {id:"aerate",title:"Core aerate",why:"While the grass is growing fastest.",start:"06-01",end:"07-15"},
+  {id:"fert2",title:"Summer fertilizer",why:"About 1 lb nitrogen per 1,000 sq ft.",start:"06-15",end:"07-31"},
+  {id:"stopfert",title:"Last fertilizer of the year",why:"Late feeding raises winter injury risk.",start:"08-15",end:"08-31"},
+  {id:"prefall",title:"Fall pre-emergent",why:"Stops annual bluegrass and winter weeds.",start:"09-01",end:"09-30"},
+  {id:"leaves",title:"Clear leaves",why:"Don't let leaves mat down on dormant grass.",start:"10-15",end:"11-30"},
+  {id:"timeroff",title:"Bring in timer and hoses",dyn:"off",why:"A hard freeze can crack valves and split hoses."}
+];
+
+/* ---------- helpers ---------- */
+const esc=s=>String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const uid=()=>Math.random().toString(36).slice(2,10);
+const z2=n=>String(n).padStart(2,"0");
+const ymd=d=>d.getFullYear()+"-"+z2(d.getMonth()+1)+"-"+z2(d.getDate());
+function parseYmd(s){const p=String(s).split("-").map(Number);return new Date(p[0],p[1]-1,p[2]);}
+function dayOnly(d){return new Date(d.getFullYear(),d.getMonth(),d.getDate());}
+function addDays(d,n){const x=new Date(d);x.setDate(x.getDate()+n);return x;}
+function weekStart(d){const x=dayOnly(d);x.setDate(x.getDate()-((x.getDay()+6)%7));return x;}
+function mmdd(s,y){const p=String(s).split("-").map(Number);return new Date(y,p[0]-1,p[1]);}
+const fmtMD=d=>MON[d.getMonth()]+" "+d.getDate();
+const fmtIn=x=>(Math.round(x*100)/100).toFixed(2);
+const fmtSq=x=>Math.round(x).toLocaleString();
+const daysBetween=(a,b)=>Math.round((dayOnly(b)-dayOnly(a))/864e5);
+function num(v,d){const n=parseFloat(v);return isFinite(n)?n:d;}
+const copyPts=p=>p.map(q=>[q[0],q[1]]);
+
+/* ---------- state ---------- */
+function defaults(){
+  return {v:2,setupDone:false,address:"",center:null,outline:[],features:[],
+    settings:{grass:"fescue",firstFrost:"11-01",lastFrost:"04-10",bagSqft:5000,seedUntil:null,expRain:null},
+    sprinklers:[],rain:[],runs:[],done:{},updatedAt:0};
+}
+function normalize(d){
+  const s=Object.assign(defaults(),d||{});
+  s.settings=Object.assign(defaults().settings,(d&&d.settings)||{});
+  ["outline","features","sprinklers","rain","runs"].forEach(k=>{if(!Array.isArray(s[k]))s[k]=[];});
+  if(!s.done||typeof s.done!=="object")s.done={};
+  return s;
+}
+let state=defaults(), storageOk=true, saveMsg="";
+try{const raw=localStorage.getItem(KEY);if(raw)state=normalize(JSON.parse(raw));}catch(_){storageOk=false;}
+let ui={tab:"yard",step:"welcome",view:null,edit:null,sprMode:false,pendingSpr:null,sel:null,confirm:null,tuna:null,
+  geo:{q:"",results:[],loading:false,error:""}};
+let map=null, layers=null, resetView=false;
+
+function persist(){
+  try{localStorage.setItem(KEY,JSON.stringify(state));saveMsg="";}
+  catch(_){saveMsg="This browser isn't saving. Use Export Backup on the Yard tab so you don't lose your yard.";}
+}
+function commit(opts){
+  state.updatedAt=Date.now(); gridCache.key=""; persist();
+  if(!(opts&&opts.noRender))render();
+}
+
+/* ---------- geometry (local flat projection, feet) ---------- */
+function projector(o){
+  const kx=111320*Math.cos(o[0]*Math.PI/180)*FT, ky=110540*FT;
+  return {fw:p=>[(p[1]-o[1])*kx,(p[0]-o[0])*ky], inv:q=>[o[0]+q[1]/ky,o[1]+q[0]/kx]};
+}
+function shoelace(p){let a=0;for(let i=0;i<p.length;i++){const q=p[(i+1)%p.length];a+=p[i][0]*q[1]-q[0]*p[i][1];}return Math.abs(a)/2;}
+function areaSqFt(pts){if(!pts||pts.length<3)return 0;const P=projector(pts[0]);return shoelace(pts.map(P.fw));}
+function pip(x,y,p){let c=false;for(let i=0,j=p.length-1;i<p.length;j=i++){const xi=p[i][0],yi=p[i][1],xj=p[j][0],yj=p[j][1];if(((yi>y)!==(yj>y))&&(x<(xj-xi)*(y-yi)/(yj-yi)+xi))c=!c;}return c;}
+function centroid(p){let a=0,b=0;p.forEach(q=>{a+=q[0];b+=q[1];});return [a/p.length,b/p.length];}
+function rot(p,deg){const a=deg*Math.PI/180,c=Math.cos(a),s=Math.sin(a);return [p[0]*c+p[1]*s,-p[0]*s+p[1]*c];}
+function sprRect(s){
+  const P=projector([s.lat,s.lon]), w=s.w/2, h=s.h/2;
+  return [[-w,h],[w,h],[w,-h],[-w,-h]].map(c=>P.inv(rot(c,s.angle||0)));
+}
+function inSpr(q,x,y){
+  const s=q.s,dx=x-q.c[0],dy=y-q.c[1],t=STYPES[s.type].shape;
+  if(t==="circle")return dx*dx+dy*dy<=s.r*s.r;
+  if(t==="rect"){const p=rot([dx,dy],-(s.angle||0));return Math.abs(p[0])<=s.w/2&&Math.abs(p[1])<=s.h/2;}
+  return false;
+}
+let gridCache={key:"",val:null};
+function yardGrid(){
+  const o=state.outline, empty={total:0,lawn:0,notLawn:0,cov:0,pct:0,per:{}};
+  if(o.length<3)return empty;
+  const key=JSON.stringify([o,state.features,state.sprinklers]); if(key===gridCache.key)return gridCache.val;
+  const P=projector(centroid(o)), op=o.map(P.fw);
+  const hs=state.features.filter(f=>f.pts.length>=3).map(f=>f.pts.map(P.fw));
+  const sprs=state.sprinklers.filter(s=>STYPES[s.type].shape!=="none").map(s=>({s,c:P.fw([s.lat,s.lon])}));
+  const total=shoelace(op);
+  const xs=op.map(p=>p[0]),ys=op.map(p=>p[1]);
+  const x0=Math.min(...xs),x1=Math.max(...xs),y0=Math.min(...ys),y1=Math.max(...ys);
+  let step=1; if((x1-x0)*(y1-y0)>60000)step=Math.sqrt((x1-x0)*(y1-y0)/60000);
+  let inside=0,lawn=0,cov=0; const per={}; sprs.forEach(q=>{per[q.s.id]=0;});
+  for(let y=y0+step/2;y<y1;y+=step){for(let x=x0+step/2;x<x1;x+=step){
+    if(!pip(x,y,op))continue; inside++;
+    if(hs.some(h=>pip(x,y,h)))continue; lawn++;
+    let hit=false; sprs.forEach(q=>{if(inSpr(q,x,y)){per[q.s.id]++;hit=true;}}); if(hit)cov++;
+  }}
+  const k=inside?total/inside:0;
+  Object.keys(per).forEach(id=>{per[id]*=k;});
+  const val={total,lawn:lawn*k,notLawn:Math.max(0,total-lawn*k),cov:cov*k,pct:lawn?cov/lawn:0,per};
+  gridCache={key,val}; return val;
+}
+
+/* ---------- season + water ---------- */
+function grass(){return GRASS[state.settings.grass]||GRASS.fescue;}
+function seasonInfo(now){
+  const y=now.getFullYear(), t=dayOnly(now);
+  const ff=mmdd(state.settings.firstFrost,y), lf=mmdd(state.settings.lastFrost,y);
+  const frostOff=t>=ff||t<lf;
+  const need=(grass().warm?WARM_NEED:COOL_NEED)[now.getMonth()];
+  const seeding=!!(state.settings.seedUntil&&parseYmd(state.settings.seedUntil)>=t);
+  const nextLf=lf<=t?mmdd(state.settings.lastFrost,y+1):lf;
+  return {frostOff,need,seeding,daysToFrost:daysBetween(t,ff),springDate:nextLf};
+}
+function expectedRain(now){const e=state.settings.expRain;if(!e||!e.on)return 0;const age=daysBetween(parseYmd(e.on),now);return age>=0&&age<=1?num(e.in,0):0;}
+function sumRain(a,b){let t=0;state.rain.forEach(r=>{const d=parseYmd(r.date);if(d>=a&&d<b)t+=num(r.in,0);});return t;}
+function sumApplied(sid,a,b){const s=state.sprinklers.find(x=>x.id===sid);if(!s)return 0;let t=0;
+  state.runs.forEach(r=>{if(r.sid!==sid)return;const d=parseYmd(r.date);if(d>=a&&d<b)t+=num(r.min,0)*num(s.rate,0)/60;});return t;}
+function roundMin(m){return m<=0?0:Math.max(5,Math.ceil(m/5)*5);}
+function sortedSprs(){return state.sprinklers.slice().sort((a,b)=>(a.valve+a.spot).localeCompare(b.valve+b.spot));}
+function waterPlan(now){
+  const si=seasonInfo(now), t=dayOnly(now), ws=weekStart(now), we=addDays(ws,7), tm=addDays(t,1);
+  const rainWeek=sumRain(ws,we), rainToday=sumRain(t,tm), exp=expectedRain(now);
+  const mode=si.frostOff?"off":si.seeding?"seeding":si.need===0?"dormant":"normal";
+  const g=yardGrid();
+  const spots=sortedSprs().map(s=>{
+    const rate=Math.max(0.01,num(s.rate,0.3)); let applied,delivered,remaining;
+    if(mode==="seeding"){applied=sumApplied(s.id,t,tm);delivered=applied+rainToday;remaining=Math.max(0,SEED_DAILY-delivered-(exp>=0.1?SEED_DAILY:0));}
+    else{applied=sumApplied(s.id,ws,we);delivered=applied+rainWeek;remaining=Math.max(0,si.need-delivered-exp);}
+    const minutes=(mode==="off"||mode==="dormant")?0:roundMin(remaining/rate*60);
+    let cycles=1; if(mode==="seeding"&&minutes>0)cycles=2; else if(s.cycle&&minutes>15)cycles=Math.ceil(minutes/12);
+    return {s,applied,delivered,remaining,minutes,cycles,lawnSq:g.per[s.id]!=null?g.per[s.id]:null};
+  });
+  let w=0,aw=0; spots.forEach(p=>{if(STYPES[p.s.type].shape==="none")return;const k=p.lawnSq||1;w+=k;aw+=k*p.applied;});
+  return {si,mode,need:si.need,rainWeek,rainToday,exp,spots,avgApplied:w?aw/w:0,ws};
+}
+function recText(p,mode){
+  if(mode==="off")return {t:"Timer season is over",k:"later"};
+  if(mode==="dormant")return {t:"Dormant, no water",k:"later"};
+  if(p.minutes===0)return {t:mode==="seeding"?"Moist enough today":"Covered this week",k:"done"};
+  if(mode==="seeding")return {t:"2 runs of "+Math.ceil(p.minutes/2)+" min today",k:"soon"};
+  if(p.cycles>1)return {t:p.cycles+" runs of "+Math.ceil(p.minutes/p.cycles)+" min",k:"now"};
+  return {t:"Run "+p.minutes+" min",k:"now"};
+}
+
+/* ---------- tasks ---------- */
+function tasks(){return grass().warm?TASKS_WARM:TASKS_COOL;}
+function taskWindow(t,y){
+  if(t.dyn==="off"){const e=mmdd(state.settings.firstFrost,y);return {start:addDays(e,-10),end:e};}
+  if(t.dyn==="on"){const s=mmdd(state.settings.lastFrost,y);return {start:s,end:addDays(s,21)};}
+  return {start:mmdd(t.start,y),end:mmdd(t.end,y)};
+}
+function taskStatus(t,now){
+  const td=dayOnly(now), y=td.getFullYear(), w=taskWindow(t,y), key=t.id+":"+y, done=!!state.done[key];
+  if(td>w.end){const nx=taskWindow(t,y+1);return {status:done?"done":"missed",w,key,next:nx.start,sortDate:nx.start};}
+  if(td>=w.start)return {status:done?"done":"now",w,key,sortDate:w.start};
+  const dd=daysBetween(td,w.start);
+  return {status:done?"done":dd<=30?"soon":"later",w,key,days:dd,sortDate:w.start};
+}
+function pillFor(st){
+  if(st.status==="done")return '<span class="pill done">Done</span>';
+  if(st.status==="now")return '<span class="pill now">Now</span>';
+  if(st.status==="soon")return `<span class="pill soon">In ${st.days} day${st.days===1?"":"s"}</span>`;
+  if(st.status==="missed")return '<span class="pill missed">Next '+fmtMD(st.next)+'</span>';
+  return '<span class="pill later">'+fmtMD(st.w.start)+'</span>';
+}
+function taskRow(t,st){
+  const id="tk-"+t.id, when=st.status==="missed"?"Window passed this year":fmtMD(st.w.start)+" to "+fmtMD(st.w.end), dim=st.status==="done"||st.status==="missed";
+  return `<div class="item"><input type="checkbox" id="${id}" data-act="task" data-key="${esc(st.key)}" ${st.status==="done"?"checked":""} aria-label="Mark ${esc(t.title)} done"><label for="${id}" class="grow" style="cursor:pointer"><div class="title" style="${dim?"color:var(--muted)":""}">${esc(t.title)}</div><div class="sub">${esc(t.why)}</div><div class="sub" style="margin-top:2px">${when}</div></label>${pillFor(st)}</div>`;
+}
+
+/* ---------- icons ---------- */
+const I={
+  drop:'<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3s6 6.5 6 11a6 6 0 0 1-12 0c0-4.5 6-11 6-11z"/></svg>',
+  warn:'<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v4M12 16h.01"/></svg>',
+  snow:'<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2v20M4.9 7l14.2 10M4.9 17L19.1 7"/></svg>',
+  seed:'<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21v-8M12 13c0-4 3-7 7-7 0 4-3 7-7 7zM12 15c0-3-2.5-5.5-6-5.5 0 3 2.5 5.5 6 5.5z"/></svg>',
+  cal:'<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg>',
+  rain:'<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 15a4 4 0 0 1-.6-8 6 6 0 0 1 11.4 1.5A3.5 3.5 0 0 1 17 15z"/><path d="M8 19l1-2M12 21l1-2M16 19l1-2"/></svg>',
+  leaf:'<svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 19c0-8 5-13 15-14-1 10-6 15-14 15z"/><path d="M5 19l7-7"/></svg>'
+};
+
+/* ---------- map ---------- */
+const vtxIcon=(c,first)=>L.divIcon({className:"turf-icon",iconSize:[44,44],iconAnchor:[22,22],html:`<span class="vtxw"><span class="vtx" style="border-color:${c};width:${first?24:20}px;height:${first?24:20}px"></span></span>`});
+const midIcon=L.divIcon({className:"turf-icon",iconSize:[36,36],iconAnchor:[18,18],html:'<span class="vtxw"><span class="mid">+</span></span>'});
+const pinIcon=L.divIcon({className:"turf-icon",iconSize:[20,20],iconAnchor:[10,10],html:'<span class="vtxw"><span class="pin"></span></span>'});
+const sprIcon=(lab,sel,type)=>L.divIcon({className:"turf-icon",iconSize:[44,44],iconAnchor:[22,22],html:`<span class="vtxw"><span class="sprm" style="background:${sel?"#FF9F0A":type==="soaker"?"#8A5A2B":"#0A60D0"}">${esc(lab)}</span></span>`});
+
+function unmountMap(){
+  if(!map)return;
+  try{ui.view={c:map.getCenter(),z:map.getZoom()};map.remove();}catch(_){}
+  map=null; layers=null;
+}
+function mountMap(){
+  const el=$("#map"); if(!el)return;
+  map=L.map(el,{maxZoom:22,zoomSnap:0.5});
+  L.tileLayer(ESRI,{maxNativeZoom:19,maxZoom:22,attribution:"Imagery &copy; Esri"}).addTo(map);
+  layers=L.layerGroup().addTo(map);
+  const pts=ui.edit&&ui.edit.pts.length>=3?ui.edit.pts:state.outline;
+  if(ui.view)map.setView(ui.view.c,ui.view.z);
+  else if(pts.length>=3)map.fitBounds(L.latLngBounds(pts),{padding:[28,28],maxZoom:21});
+  else if(state.center)map.setView(state.center,20);
+  else map.setView([39.5,-98.35],4);
+  map.on("click",onMapClick);
+  drawLayers();
+}
+function drawLayers(){
+  if(!map)return; layers.clearLayers();
+  const ed=ui.edit, yardTab=state.setupDone&&ui.tab==="yard";
+  if(!(ed&&ed.target==="outline")&&state.outline.length>=3)
+    L.polygon(state.outline,{color:"#FFFFFF",weight:2,fillColor:"#34C759",fillOpacity:.18,interactive:false}).addTo(layers);
+  state.features.forEach(f=>{
+    if(ed&&ed.target==="feature"&&ed.id===f.id)return; if(f.pts.length<3)return;
+    const c=(FEATURES[f.kind]||FEATURES.other).color, sel=ui.sel&&ui.sel.kind==="feature"&&ui.sel.id===f.id;
+    const pg=L.polygon(f.pts,{color:sel?"#FFD60A":c,weight:sel?4:2,fillColor:c,fillOpacity:.4,interactive:yardTab&&!ed,bubblingMouseEvents:false});
+    if(yardTab&&!ed)pg.on("click",()=>select("feature",f.id));
+    pg.addTo(layers);
+  });
+  if(yardTab&&!ed){
+    const counts={},idx={}; state.sprinklers.forEach(s=>{counts[s.valve]=(counts[s.valve]||0)+1;});
+    sortedSprs().forEach(s=>{
+      idx[s.valve]=(idx[s.valve]||0)+1;
+      const lab=s.valve+(counts[s.valve]>1?idx[s.valve]:""), sel=ui.sel&&ui.sel.kind==="spr"&&ui.sel.id===s.id, sh=STYPES[s.type].shape;
+      const st={color:sel?"#FFD60A":"#0A84FF",weight:2,dashArray:"6 5",fillColor:"#0A84FF",fillOpacity:.15,interactive:false};
+      if(sh==="circle")L.circle([s.lat,s.lon],Object.assign({radius:s.r*M_PER_FT},st)).addTo(layers);
+      if(sh==="rect")L.polygon(sprRect(s),st).addTo(layers);
+      const m=L.marker([s.lat,s.lon],{draggable:true,icon:sprIcon(lab,sel,s.type),keyboard:false}).addTo(layers);
+      m.on("click",()=>select("spr",s.id));
+      m.on("dragend",e=>{const ll=e.target.getLatLng();s.lat=ll.lat;s.lon=ll.lng;commit({noRender:true});drawLayers();refreshStats();});
+    });
+    if(ui.pendingSpr)L.marker([ui.pendingSpr.lat,ui.pendingSpr.lon],{icon:sprIcon("+",true,"x"),interactive:false}).addTo(layers);
+  }
+  if(!state.setupDone&&state.center&&ed&&ed.target==="outline")L.marker(state.center,{icon:pinIcon,interactive:false}).addTo(layers);
+  if(ed)drawEditor();
+}
+function drawEditor(){
+  const ed=ui.edit, pts=ed.pts, c=ed.color;
+  ed.poly=null;
+  if(pts.length>=3)ed.poly=L.polygon(pts,{color:c,weight:3,fillColor:c,fillOpacity:.22,interactive:false}).addTo(layers);
+  else if(pts.length===2)ed.poly=L.polyline(pts,{color:c,weight:3,interactive:false}).addTo(layers);
+  if(pts.length>=3)pts.forEach((p,i)=>{
+    const q=pts[(i+1)%pts.length], mid=[(p[0]+q[0])/2,(p[1]+q[1])/2];
+    const m=L.marker(mid,{icon:midIcon,keyboard:false,title:"Add a corner here"}).addTo(layers);
+    m.on("click",()=>{hist();pts.splice(i+1,0,mid);afterEdit();});
+  });
+  pts.forEach((p,i)=>{
+    const m=L.marker(p,{draggable:true,icon:vtxIcon(c,i===0),keyboard:false,title:"Corner "+(i+1)}).addTo(layers);
+    m.on("dragstart",()=>hist());
+    m.on("drag",e=>{const ll=e.target.getLatLng();pts[i]=[ll.lat,ll.lng];if(ed.poly)ed.poly.setLatLngs(pts);updateLive();});
+    m.on("dragend",()=>afterEdit());
+  });
+}
+function hist(){const ed=ui.edit;ed.history.push(copyPts(ed.pts));if(ed.history.length>60)ed.history.shift();}
+function afterEdit(){drawLayers();updateLive();}
+function liveText(){const ed=ui.edit;if(!ed)return "";const n=ed.pts.length;return n>=3?fmtSq(areaSqFt(ed.pts))+" sq ft":n===0?"Tap the map to add corners":n+" of 3+ corners";}
+function updateLive(){
+  const ed=ui.edit; if(!ed)return;
+  const l=$("#live"); if(l)l.textContent=liveText();
+  const u=$("#ed-undo"); if(u)u.disabled=!ed.history.length;
+  const c=$("#ed-clear"); if(c)c.disabled=!ed.pts.length;
+  const s=$("#ed-save"); if(s)s.disabled=ed.pts.length<3;
+}
+function onMapClick(e){
+  const ll=[e.latlng.lat,e.latlng.lng];
+  if(ui.edit){hist();ui.edit.pts.push(ll);afterEdit();return;}
+  if(state.setupDone&&ui.tab==="yard"){
+    if(ui.sprMode){ui.pendingSpr={lat:ll[0],lon:ll[1]};ui.sel=null;drawLayers();refreshPanel();return;}
+    if(ui.sel){ui.sel=null;ui.confirm=null;drawLayers();refreshPanel();}
+  }
+}
+function select(kind,id){ui.sel={kind,id};ui.sprMode=false;ui.pendingSpr=null;ui.confirm=null;drawLayers();refreshPanel();refreshSeg();}
+function editorBar(){
+  const ed=ui.edit;
+  return `<div class="edbar"><span id="live" class="live" aria-live="polite">${esc(liveText())}</span>
+  <button class="small" data-act="ed-undo" id="ed-undo" ${ed.history.length?"":"disabled"}>Undo</button>
+  <button class="small" data-act="ed-clear" id="ed-clear" ${ed.pts.length?"":"disabled"}>Clear</button></div>`;
+}
+function startEdit(target,opts){
+  const o=opts||{};
+  ui.edit={target,id:o.id||null,kind:o.kind||null,name:o.name||"",isNew:!!o.isNew,pts:copyPts(o.pts||[]),history:[],
+    color:target==="outline"?"#FFD60A":(FEATURES[o.kind]||FEATURES.other).color};
+  resetView=true; ui.sel=null; ui.pendingSpr=null; ui.sprMode=false;
+}
+
+/* ---------- geocoding ---------- */
+async function geocode(q){
+  try{
+    const r=await fetch("https://geocode.arcgis.com/arcgis/rest/services/World/GeocodeServer/findAddressCandidates?f=json&maxLocations=6&SingleLine="+encodeURIComponent(q));
+    const j=await r.json();
+    if(j&&Array.isArray(j.candidates)&&j.candidates.length)
+      return j.candidates.filter(c=>c.location).map(c=>({label:c.address,lat:c.location.y,lon:c.location.x}));
+  }catch(_){}
+  try{
+    const r=await fetch("https://photon.komoot.io/api/?limit=6&q="+encodeURIComponent(q));
+    const j=await r.json();
+    if(j&&Array.isArray(j.features))return j.features.map(f=>{const p=f.properties||{};
+      const line=p.housenumber&&p.street?p.housenumber+" "+p.street:(p.name||p.street||"");
+      return {label:[line,p.city,p.state,p.postcode].filter(Boolean).join(", "),lat:f.geometry.coordinates[1],lon:f.geometry.coordinates[0]};});
+  }catch(_){}
+  return null;
+}
+async function reverseGeocode(lat,lon){
+  try{const r=await fetch(`https://geocode.arcgis.com/arcgis/rest/services/World/GeocodeServer/reverseGeocode?f=json&location=${lon},${lat}`);
+    const j=await r.json(); if(j&&j.address&&j.address.Match_addr)return j.address.Match_addr;}catch(_){}
+  return "Current location";
+}
+function chooseAddress(label,lat,lon){
+  const moved=!state.center||Math.abs(state.center[0]-lat)>0.0005||Math.abs(state.center[1]-lon)>0.0005;
+  state.address=label; state.center=[lat,lon];
+  if(moved){state.outline=[];state.features=[];state.sprinklers=[];}
+  persist(); goStep("outline");
+}
+
+/* ---------- render ---------- */
+function header(eyebrow,title,right){
+  return `<header class="top"><div class="grow"><div class="eyebrow">${esc(eyebrow)}</div><h1>${esc(title)}</h1></div>${right||""}</header>`;
+}
+function saveLine(){
+  if(!storageOk)return `<div class="save">This browser blocks saving. Export a backup from the Yard tab.</div>`;
+  return `<div class="save" id="save">${esc(saveMsg)}</div>`;
+}
+function render(){
+  unmountMap();
+  if(resetView){ui.view=null;resetView=false;}
+  const tabs=$("#tabs"); tabs.hidden=!state.setupDone;
+  tabs.querySelectorAll("a").forEach(a=>{if(a.dataset.tab===ui.tab)a.setAttribute("aria-current","page");else a.removeAttribute("aria-current");});
+  let h;
+  if(!state.setupDone)h=renderSetup();
+  else if(ui.tab==="water")h=renderWater();
+  else if(ui.tab==="calendar")h=renderCalendar();
+  else if(ui.tab==="today")h=renderToday();
+  else h=renderYard();
+  $("#app").innerHTML=h+saveLine();
+  if($("#map"))mountMap();
+}
+
+/* ---------- setup ---------- */
+const STEPS=["address","outline","features","grass"];
+function stepBar(){const i=STEPS.indexOf(ui.step);return `<div class="steps" aria-label="Step ${i+1} of 4">${STEPS.map((s,k)=>`<i class="${k<=i?"on":""}"></i>`).join("")}</div>`;}
+function goStep(s){
+  if(s==="outline")startEdit("outline",{pts:state.outline});
+  else ui.edit=null;
+  ui.step=s; resetView=true; render(); window.scrollTo(0,0);
+}
+function renderSetup(){
+  if(ui.step==="welcome")return `<div style="padding-top:28px;display:flex;flex-direction:column;gap:24px">
+    <div style="color:var(--accent)">${I.leaf}</div>
+    <div><h1>Turf</h1><p class="body" style="margin-top:8px">Lawn care for hoses and sprinklers. Set up your yard once and Turf works out watering, seed and fertilizer from its real size.</p></div>
+    <ol class="bullets">
+      <li><span class="n">1</span><div><div class="title">Find your address</div><div class="sub">Turf opens a satellite view of your lot.</div></div></li>
+      <li><span class="n">2</span><div><div class="title">Outline your yard</div><div class="sub">Tap the corners of the area you take care of.</div></div></li>
+      <li><span class="n">3</span><div><div class="title">Mark what isn't lawn</div><div class="sub">House, driveway, patio and beds.</div></div></li>
+      <li><span class="n">4</span><div><div class="title">Pick your grass</div><div class="sub">Sets your seasonal calendar.</div></div></li>
+    </ol>
+    <button class="primary wide" data-act="go" data-step="address">Get Started</button>
+    <label class="btn" for="import" style="width:100%">Restore From Backup</label><input type="file" id="import" accept="application/json,.json" class="sr" data-act="import">
+  </div>`;
+
+  if(ui.step==="address"){
+    const g=ui.geo;
+    let res="";
+    if(g.loading)res=`<div class="item"><div class="sub">Searching…</div></div>`;
+    else if(g.error)res=`<div class="alert">${I.warn}<div><b>${esc(g.error)}</b><span>Include the city and state, like "123 Main St, Louisville, KY".</span></div></div>`;
+    else if(g.results.length)res=`<section class="card list">${g.results.map((r,i)=>`<button class="result" data-act="pickaddr" data-i="${i}"><span class="grow"><span class="title" style="display:block">${esc(r.label)}</span></span></button>`).join("")}</section>`;
+    return `${stepBar()}${header("Step 1 of 4","Your Address")}
+    <form class="card" data-form="geo"><label class="f" for="geo-q">Street address<input id="geo-q" value="${esc(g.q)}" autocomplete="street-address" placeholder="123 Main St, Louisville, KY" enterkeyhint="search"></label>
+    <button type="submit" class="primary">Search</button>
+    <button type="button" class="blue" data-act="locate">Use My Location</button></form>
+    ${res}
+    <div class="btns"><button data-act="go" data-step="welcome">Back</button></div>`;
+  }
+
+  if(ui.step==="outline"){
+    return `${stepBar()}${header("Step 2 of 4","Outline Your Yard")}
+    <p class="hint">Zoom in, then tap each corner of the yard you take care of. Drag a corner to fix it, or tap a + to add a corner between two others. Include the house and driveway; you'll mark them next.</p>
+    <div id="map" class="mapbox tall" role="application" aria-label="Satellite map. Tap to add a corner."></div>
+    ${editorBar()}
+    <div class="btns"><button data-act="go" data-step="address">Back</button><button class="primary" id="ed-save" data-act="outline-next" ${ui.edit.pts.length<3?"disabled":""}>Next</button></div>`;
+  }
+
+  if(ui.step==="features"){
+    if(ui.edit)return featureEditorHtml("Step 3 of 4");
+    const g=yardGrid();
+    return `${stepBar()}${header("Step 3 of 4","Mark What Isn't Lawn")}
+    <p class="hint">Trace anything inside your outline that isn't grass. Skip this if it's all lawn.</p>
+    <div id="map" class="mapbox" role="img" aria-label="Your yard outline on a satellite map"></div>
+    <div class="stats" style="grid-template-columns:repeat(2,minmax(0,1fr))"><div class="stat"><span class="k">Whole yard</span><span class="v">${fmtSq(g.total)}</span><span class="sub">sq ft</span></div><div class="stat hi"><span class="k">Lawn</span><span class="v">${fmtSq(g.lawn)}</span><span class="sub">sq ft</span></div></div>
+    ${featureListHtml()}
+    <div class="btns"><button data-act="go" data-step="outline">Back</button><button class="primary" data-act="go" data-step="grass">Next</button></div>`;
+  }
+
+  /* grass */
+  return `${stepBar()}${header("Step 4 of 4","Your Grass")}
+  <section class="card list">${Object.keys(GRASS).map(k=>`<label class="item check" for="gr-${k}"><input type="radio" name="grass" id="gr-${k}" value="${k}" data-act="setupgrass" ${state.settings.grass===k?"checked":""}><span class="grow"><span class="title" style="display:block">${GRASS[k].name}</span><span class="sub">${esc(GRASS[k].detail)}</span></span></label>`).join("")}</section>
+  <p class="hint" style="margin:0 4px">Not sure? Leave tall fescue picked. Your county extension office can identify grass from a sample, and you can change it later.</p>
+  <div class="btns"><button data-act="go" data-step="features">Back</button><button class="primary" data-act="finish">Finish Setup</button></div>`;
+}
+function featureListHtml(){
+  let h=`<div class="sect">Not lawn</div><section class="card list">`;
+  if(!state.features.length)h+=`<div class="item"><div class="sub">Nothing marked yet.</div></div>`;
+  state.features.forEach(f=>{const k=FEATURES[f.kind]||FEATURES.other;
+    h+=`<div class="item"><span class="swatch" style="background:${k.color}"></span><div class="grow"><div class="title">${esc(f.name)}</div><div class="sub">${esc(k.label)} · ${fmtSq(areaSqFt(f.pts))} sq ft</div></div>
+    <button class="small blue" data-act="editfeat" data-id="${esc(f.id)}">Edit</button>
+    ${ui.confirm==="feat:"+f.id?`<button class="small danger" data-act="delfeat2" data-id="${esc(f.id)}">Confirm</button>`:`<button class="small danger" data-act="delfeat" data-id="${esc(f.id)}" aria-label="Delete ${esc(f.name)}">Delete</button>`}</div>`;});
+  h+=`</section><section class="card tight"><div class="sub">Add something that isn't lawn</div><div class="kinds">${Object.keys(FEATURES).map(k=>`<button data-act="addfeat" data-kind="${k}">${esc(FEATURES[k].label)}</button>`).join("")}</div></section>`;
+  return h;
+}
+function featureEditorHtml(eyebrow){
+  const ed=ui.edit, k=FEATURES[ed.kind]||FEATURES.other;
+  return `${ui.step==="features"&&!state.setupDone?stepBar():""}${header(eyebrow,ed.isNew?"Trace "+k.label:"Edit "+ed.name)}
+  <p class="hint">Tap the corners of the ${esc(k.label.toLowerCase())}. Drag a corner to adjust it.</p>
+  <label class="f" for="ed-name">Name<input id="ed-name" value="${esc(ed.name)}"></label>
+  <div id="map" class="mapbox tall" role="application" aria-label="Satellite map. Tap to add a corner."></div>
+  ${editorBar()}
+  <div class="btns"><button data-act="ed-cancel">Cancel</button><button class="primary" id="ed-save" data-act="ed-savefeat" ${ed.pts.length<3?"disabled":""}>Save</button></div>`;
+}
+
+/* ---------- today ---------- */
+function renderToday(){
+  const now=new Date(), P=waterPlan(now), si=P.si;
+  let h=header(WD[now.getDay()]+", "+fmtMD(now),"Turf");
+  if(P.mode==="off")h+=`<div class="alert info">${I.snow}<div><b>Timer season is over</b><span>Keep the hose timer and hoses indoors. Reconnect around ${fmtMD(si.springDate)}.</span></div></div>`;
+  else if(si.daysToFrost<=14)h+=`<div class="alert">${I.snow}<div><b>First frost in about ${si.daysToFrost} day${si.daysToFrost===1?"":"s"}</b><span>Disconnect the hose timer and drain the hoses before then. A freeze can crack the valves.</span></div></div>`;
+  if(P.mode==="seeding")h+=`<div class="alert good">${I.seed}<div><b>New seed mode until ${fmtMD(parseYmd(state.settings.seedUntil))}</b><span>Keep the top inch moist. Two short runs a day beat one long one.</span></div></div>`;
+  if(P.mode==="dormant")h+=`<div class="alert info">${I.drop}<div><b>Grass is dormant</b><span>No watering needed this month.</span></div></div>`;
+  if(!state.sprinklers.length){
+    h+=`<section class="card"><h2>Add your sprinklers</h2><p class="body">Drop a pin where each hose sprinkler sits and pick its timer valve. Turf uses that to work out run times.</p><a class="btn primary" href="#yard">Open Yard</a></section>`;
+  }
+  if(P.mode==="normal"){
+    const need=P.need||0.01, rp=Math.min(1,P.rainWeek/need), sp=Math.min(1-rp,P.avgApplied/need), ep=Math.min(1-rp-sp,P.exp/need);
+    h+=`<section class="card"><div class="row between"><h2>Water This Week</h2><span class="sub">${fmtMD(P.ws)} to ${fmtMD(addDays(P.ws,6))}</span></div>
+    <div class="row" style="align-items:baseline;gap:6px"><span class="big">${fmtIn(P.rainWeek+P.avgApplied)}</span><span class="body">of ${fmtIn(P.need)} in needed</span></div>
+    <div class="bar" role="img" aria-label="${fmtIn(P.rainWeek)} inches rain, ${fmtIn(P.avgApplied)} inches from sprinklers, ${fmtIn(P.exp)} inches rain expected"><i style="width:${rp*100}%;background:var(--blue)"></i><i style="width:${sp*100}%;background:var(--accent)"></i><i style="width:${ep*100}%;background:var(--blue);opacity:.35"></i></div>
+    <div class="legend"><span><i style="background:var(--blue)"></i>Rain ${fmtIn(P.rainWeek)}</span><span><i style="background:var(--accent)"></i>Sprinklers ${fmtIn(P.avgApplied)}</span>${P.exp?`<span><i style="background:var(--blue);opacity:.35"></i>Expected ${fmtIn(P.exp)}</span>`:""}</div></section>`;
+  }
+  if(state.sprinklers.length){
+    h+=`<section class="card list"><div class="row between" style="padding:10px 0 4px"><div class="row" style="gap:8px;color:var(--blue)">${I.drop}<h2 style="color:var(--fg)">Next Watering</h2></div><a class="link" href="#water">Water</a></div>`;
+    P.spots.forEach(p=>{const r=recText(p,P.mode);
+      h+=`<div class="item"><div class="badge">${esc(p.s.valve)}</div><div class="grow"><div class="title">${esc(p.s.spot)}</div><div class="sub">${esc(STYPES[p.s.type].name)} · ${fmtIn(p.delivered)} in so far</div></div><span class="pill ${r.k}">${esc(r.t)}</span></div>`;});
+    h+=`</section>`;
+  }
+  if(P.mode!=="off"){
+    const e=state.settings.expRain, ev=e&&daysBetween(parseYmd(e.on),now)<=1?e.in:"";
+    h+=`<section class="card"><div class="row" style="gap:8px;color:var(--blue)">${I.rain}<h2 style="color:var(--fg)">Rain</h2></div>
+    <form class="grid2" data-form="quickrain"><label class="f" for="qr-in">Fell today (in)<input id="qr-in" inputmode="decimal" placeholder="0.25"></label>
+    <label class="f" for="qr-exp">Expected next 2 days (in)<input id="qr-exp" inputmode="decimal" value="${esc(ev)}" placeholder="0"></label>
+    <button class="blue" type="submit" style="grid-column:1/-1">Save Rain</button></form>
+    <p class="hint">Check your forecast app for the expected amount. Turf subtracts it so you don't water before a storm.</p></section>`;
+  }
+  const list=tasks().map(t=>({t,st:taskStatus(t,now)})).filter(x=>["now","soon","later"].includes(x.st.status)).sort((a,b)=>a.st.sortDate-b.st.sortDate).slice(0,4);
+  h+=`<section class="card list"><div class="row between" style="padding:10px 0 4px"><div class="row" style="gap:8px;color:var(--accent)">${I.cal}<h2 style="color:var(--fg)">Upcoming Tasks</h2></div><a class="link" href="#calendar">Calendar</a></div>`;
+  list.forEach(x=>{h+=taskRow(x.t,x.st);});
+  if(!list.length)h+=`<div class="item"><div class="sub">Nothing due. Enjoy the off season.</div></div>`;
+  return h+`</section>`;
+}
+
+/* ---------- water ---------- */
+function renderWater(){
+  const now=new Date(), P=waterPlan(now);
+  let h=header("Hose timer","Water");
+  h+=`<section class="card"><label class="check" for="seedmode"><input type="checkbox" id="seedmode" data-act="seedmode" ${P.si.seeding?"checked":""}><span class="grow"><span class="title" style="display:block">New seed mode</span><span class="sub">Short daily runs to keep fresh seed moist</span></span></label>
+  ${P.si.seeding?`<label class="f" for="seeduntil">Until<input type="date" id="seeduntil" data-act="seeduntil" value="${esc(state.settings.seedUntil)}"></label>`:""}</section>`;
+  if(!state.sprinklers.length){
+    h+=`<section class="card"><div class="title">No sprinklers yet</div><p class="hint">On the Yard tab, tap Add Sprinkler, then tap where each sprinkler sits.</p><a class="btn primary" href="#yard">Open Yard</a></section>`;
+  }else{
+    const byV={}; P.spots.forEach(p=>{(byV[p.s.valve]=byV[p.s.valve]||[]).push(p);});
+    Object.keys(byV).sort().forEach(v=>{
+      const ps=byV[v];
+      h+=`<div class="sect">Valve ${esc(v)}${ps.length>1?" · move between "+ps.length+" spots":""}</div><section class="card list">`;
+      ps.forEach((p,i)=>{
+        const r=recText(p,P.mode), s=p.s, def=p.minutes?Math.ceil(p.minutes/p.cycles):20;
+        h+=`<div class="item" style="flex-direction:column;align-items:stretch;gap:10px">
+          <div class="row"><div class="badge">${esc(v)}${ps.length>1?i+1:""}</div><div class="grow"><div class="title">${esc(s.spot)}</div>
+          <div class="sub">${esc(STYPES[s.type].name)} · ${fmtIn(s.rate)} in/hr${p.lawnSq!=null?" · "+fmtSq(p.lawnSq)+" sq ft of lawn":""}</div>
+          <div class="sub">${fmtIn(p.applied)} in from sprinkler ${P.mode==="seeding"?"today":"this week"}</div></div><span class="pill ${r.k}">${esc(r.t)}</span></div>
+          ${ps.length>1&&i<ps.length-1&&P.mode!=="off"&&P.mode!=="dormant"?`<p class="hint">When this run ends, move the sprinkler to ${esc(ps[i+1].s.spot)}.</p>`:""}
+          <form class="row" data-form="logrun" data-sid="${esc(s.id)}"><input id="lr-${esc(s.id)}" inputmode="numeric" value="${def}" aria-label="Minutes run for ${esc(s.spot)}" style="flex:1"><button type="submit" class="blue small" style="min-height:44px">Log Run</button><button type="button" class="small" style="min-height:44px" data-act="tuna" data-id="${esc(s.id)}">${ui.tuna===s.id?"Close":"Test Rate"}</button></form>
+          ${ui.tuna===s.id?tunaPanel(s):""}</div>`;
+      });
+      h+=`</section>`;
+    });
+    h+=`<p class="hint" style="margin:0 4px">Set these run times in the B-hyve app, then tap Log Run so Turf can count the water.</p>`;
+  }
+  h+=`<div class="sect">Rain log</div><section class="card"><form class="grid2" data-form="rain"><label class="f" for="rn-date">Date<input type="date" id="rn-date" value="${ymd(now)}"></label><label class="f" for="rn-in">Inches<input id="rn-in" inputmode="decimal" placeholder="0.25"></label><button type="submit" class="blue" style="grid-column:1/-1">Add Rain</button></form>`;
+  state.rain.slice().sort((a,b)=>b.date.localeCompare(a.date)).slice(0,6).forEach(r=>{
+    h+=`<div class="item"><div class="grow"><div class="title num">${fmtIn(num(r.in,0))} in</div><div class="sub">${fmtMD(parseYmd(r.date))}</div></div><button class="danger small" data-act="delrain" data-id="${esc(r.id)}">Delete</button></div>`;});
+  h+=`</section>`;
+  const ws=weekStart(now), runs=state.runs.filter(r=>parseYmd(r.date)>=ws).sort((a,b)=>b.date.localeCompare(a.date));
+  h+=`<div class="sect">Runs this week</div><section class="card list">`;
+  if(!runs.length)h+=`<div class="item"><div class="sub">No runs logged since Monday.</div></div>`;
+  runs.forEach(r=>{const s=state.sprinklers.find(x=>x.id===r.sid);if(!s)return;
+    h+=`<div class="item"><div class="badge">${esc(s.valve)}</div><div class="grow"><div class="title">${esc(s.spot)} · ${num(r.min,0)} min</div><div class="sub">${fmtMD(parseYmd(r.date))} · ${fmtIn(num(r.min,0)*s.rate/60)} in</div></div><button class="danger small" data-act="delrun" data-id="${esc(r.id)}">Delete</button></div>`;});
+  return h+`</section>`;
+}
+function tunaPanel(s){
+  return `<form class="card" style="background:var(--fill);padding:12px;gap:10px" data-form="tuna" data-sid="${esc(s.id)}">
+  <p class="body">Set 3 to 5 empty tuna cans in the spray, run the sprinkler, then measure the water depth in each can.</p>
+  <div class="grid2"><label class="f" for="tu-min">Minutes run<input id="tu-min" inputmode="decimal" value="15"></label>
+  <label class="f" for="tu-d">Depths (in), comma separated<input id="tu-d" inputmode="decimal" placeholder="0.08, 0.06, 0.09"></label></div>
+  <button type="submit" class="primary">Save Rate</button></form>`;
+}
+
+/* ---------- calendar ---------- */
+function renderCalendar(){
+  const now=new Date(), m=now.getMonth(), y=now.getFullYear();
+  let h=header(grass().warm?"Warm-season grass":"Cool-season grass","Calendar");
+  h+=`<section class="card"><label class="f" for="grass">Grass type<select id="grass" data-act="grass">${Object.keys(GRASS).map(k=>`<option value="${k}" ${state.settings.grass===k?"selected":""}>${GRASS[k].name}</option>`).join("")}</select></label>
+  <div class="grid2"><label class="f" for="ff">Avg first frost<input type="date" id="ff" data-act="ff" value="${y}-${state.settings.firstFrost}"></label>
+  <label class="f" for="lf">Avg last frost<input type="date" id="lf" data-act="lf" value="${y}-${state.settings.lastFrost}"></label></div>
+  <p class="hint">Frost dates set when to pull and reconnect the hose timer. Your county extension office lists local averages.</p></section>`;
+  const seasons=[{n:"Winter",ms:[11,0,1],s:11},{n:"Spring",ms:[2,3,4],s:2},{n:"Summer",ms:[5,6,7],s:5},{n:"Fall",ms:[8,9,10],s:8}];
+  const cur=seasons.findIndex(s=>s.ms.includes(m));
+  const all=tasks().map(t=>({t,st:taskStatus(t,now)}));
+  [0,1,2,3].map(i=>seasons[(cur+i)%4]).forEach((se,i)=>{
+    const key=d=>((d.getMonth()-se.s+12)%12)*100+d.getDate();
+    const items=all.filter(x=>se.ms.includes(x.st.w.start.getMonth())).sort((a,b)=>key(a.st.w.start)-key(b.st.w.start));
+    if(!items.length)return;
+    h+=`<div class="sect">${se.n}${i===0?" · now":""}</div><section class="card list">`;
+    items.forEach(x=>{h+=taskRow(x.t,x.st);});
+    h+=`</section>`;
+  });
+  return h;
+}
+
+/* ---------- yard ---------- */
+function renderYard(){
+  if(ui.edit&&ui.edit.target==="outline")return `${header(state.address,"Edit Outline")}
+    <p class="hint">Drag corners to adjust, tap + to add a corner, or tap the map to add one at the end.</p>
+    <div id="map" class="mapbox tall" role="application" aria-label="Satellite map. Tap to add a corner."></div>
+    ${editorBar()}
+    <div class="btns"><button data-act="ed-cancel">Cancel</button><button class="primary" id="ed-save" data-act="ed-saveoutline" ${ui.edit.pts.length<3?"disabled":""}>Save</button></div>`;
+  if(ui.edit)return featureEditorHtml(state.address);
+  const g=yardGrid();
+  let h=header(state.address,"Yard");
+  h+=`<section class="card tight"><div class="seg" role="group" aria-label="Map tool" id="seg">${segHtml()}</div>
+  <div id="map" class="mapbox" role="application" aria-label="Satellite map of your yard"></div><div id="panel">${panelHtml()}</div></section>`;
+  h+=`<div class="stats" id="stats">${statsHtml(g)}</div>`;
+  h+=`<div class="sect">Sprinklers</div><section class="card list">`;
+  if(!state.sprinklers.length)h+=`<div class="item"><div class="sub">Tap Add Sprinkler, then tap where a sprinkler sits on the map.</div></div>`;
+  sortedSprs().forEach(s=>{
+    h+=`<button class="result" style="display:flex;gap:12px;align-items:center" data-act="select" data-kind="spr" data-id="${esc(s.id)}"><span class="badge">${esc(s.valve)}</span><span class="grow"><span class="title" style="display:block">${esc(s.spot)}</span><span class="sub">${esc(STYPES[s.type].name)} · ${shapeText(s)} · ${fmtIn(s.rate)} in/hr</span></span></button>`;});
+  h+=`</section>`;
+  h+=featureListHtml();
+  h+=buyCard(g.lawn);
+  h+=`<div class="sect">Yard</div><section class="card">
+    <div class="btns"><button class="blue" data-act="editoutline">Edit Outline</button></div>
+    <div class="row between"><span class="sub">Address</span><span class="grow" style="text-align:right">${esc(state.address)}</span></div>
+    <div class="btns"><button data-act="export">Export Backup</button><label class="btn" for="import">Import Backup</label><input type="file" id="import" accept="application/json,.json" class="sr" data-act="import"></div>
+    <p class="hint">Turf saves in this browser only. Export a backup to move your yard to another device or browser.</p>
+    <div class="btns">${ui.confirm==="fresh"?`<button class="danger" data-act="fresh2">Erase Everything</button><button data-act="cancel">Keep</button>`:`<button class="danger" data-act="fresh">Start Over</button>`}</div></section>`;
+  return h;
+}
+function segHtml(){
+  return `<button type="button" data-act="sprmode" data-on="0" aria-pressed="${!ui.sprMode}">Select</button><button type="button" data-act="sprmode" data-on="1" aria-pressed="${ui.sprMode}">Add Sprinkler</button>`;
+}
+function statsHtml(g){
+  return `<div class="stat hi"><span class="k">Lawn</span><span class="v">${fmtSq(g.lawn)}</span><span class="sub">sq ft</span></div>
+  <div class="stat"><span class="k">Coverage</span><span class="v">${g.lawn?Math.round(g.pct*100):0}%</span><span class="sub">by sprinklers</span></div>
+  <div class="stat"><span class="k">Not lawn</span><span class="v">${fmtSq(g.notLawn)}</span><span class="sub">sq ft</span></div>`;
+}
+function refreshStats(){const el=$("#stats");if(el)el.innerHTML=statsHtml(yardGrid());}
+function refreshPanel(){const el=$("#panel");if(el)el.innerHTML=panelHtml();}
+function refreshSeg(){const el=$("#seg");if(el)el.innerHTML=segHtml();}
+function shapeText(s){const t=STYPES[s.type].shape;return t==="circle"?s.r+" ft radius":t==="rect"?s.w+" × "+s.h+" ft":"no spray";}
+function panelHtml(){
+  if(ui.sprMode&&!ui.pendingSpr)return `<p class="hint" style="margin-top:10px">Tap where a sprinkler sits. If you drag one sprinkler between spots, add a pin for each spot on the same valve.</p>`;
+  if(ui.pendingSpr){const p=ui.pendingSpr;return sprForm(Object.assign({spot:"",valve:"A",type:"oscillating",r:20,w:40,h:30,angle:0,rate:STYPES[p.type||"oscillating"].rate,cycle:false},p),true);}
+  if(ui.sel&&ui.sel.kind==="spr"){const s=state.sprinklers.find(x=>x.id===ui.sel.id);if(s)return sprForm(s,false);}
+  if(ui.sel&&ui.sel.kind==="feature"){const f=state.features.find(x=>x.id===ui.sel.id);if(f){const k=FEATURES[f.kind]||FEATURES.other;
+    return `<div class="row" style="margin-top:10px"><span class="swatch" style="background:${k.color}"></span><div class="grow"><div class="title">${esc(f.name)}</div><div class="sub">${esc(k.label)} · ${fmtSq(areaSqFt(f.pts))} sq ft</div></div><button class="small blue" data-act="editfeat" data-id="${esc(f.id)}">Edit Shape</button></div>`;}}
+  return `<p class="hint" style="margin-top:10px">Tap a sprinkler or a marked area to edit it. Drag a sprinkler pin to move it.</p>`;
+}
+function sprForm(s,isNew){
+  const sh=STYPES[s.type].shape;
+  return `<form class="card" style="background:var(--fill);padding:12px;gap:10px;margin-top:10px" data-form="spr">
+  <div class="title">${isNew?"New sprinkler":"Edit "+esc(s.spot)}</div>
+  <div class="grid2"><label class="f" for="sp-spot">Spot name<input id="sp-spot" value="${esc(s.spot)}" placeholder="Back Left"></label>
+  <label class="f" for="sp-valve">Timer valve<select id="sp-valve">${VALVES.map(v=>`<option ${s.valve===v?"selected":""}>${v}</option>`).join("")}</select></label></div>
+  <label class="f" for="sp-type">Type<select id="sp-type" data-act="sptype">${Object.keys(STYPES).map(k=>`<option value="${k}" ${s.type===k?"selected":""}>${STYPES[k].name}</option>`).join("")}</select></label>
+  <div class="grid3">${sh==="circle"?`<label class="f" for="sp-r">Throw radius (ft)<input id="sp-r" inputmode="decimal" value="${esc(s.r)}"></label>`:""}
+  ${sh==="rect"?`<label class="f" for="sp-w">Width (ft)<input id="sp-w" inputmode="decimal" value="${esc(s.w)}"></label><label class="f" for="sp-h">Length (ft)<input id="sp-h" inputmode="decimal" value="${esc(s.h)}"></label><label class="f" for="sp-a">Turn (°)<input id="sp-a" inputmode="decimal" value="${esc(s.angle||0)}"></label>`:""}
+  <label class="f" for="sp-rate">Rate (in/hr)<input id="sp-rate" inputmode="decimal" value="${esc(s.rate)}"></label></div>
+  <label class="check" for="sp-cycle"><input type="checkbox" id="sp-cycle" ${s.cycle?"checked":""}><span class="grow"><span class="title" style="display:block">Split into short runs</span><span class="sub">For slopes or clay that won't soak water up fast</span></span></label>
+  <p class="hint">Rate starts as a typical value for this type. The tuna-can test on the Water tab measures yours.</p>
+  <div class="btns"><button type="submit" class="primary">${isNew?"Add Sprinkler":"Save"}</button>${isNew?`<button type="button" data-act="cancel">Cancel</button>`:(ui.confirm==="spr"?`<button type="button" class="danger" data-act="delspr2">Confirm Delete</button>`:`<button type="button" class="danger" data-act="delspr">Delete</button>`)}</div></form>`;
+}
+function readSprForm(){
+  const g=id=>{const el=document.getElementById(id);return el?el.value:null;}, o={};
+  if(g("sp-spot")!=null)o.spot=g("sp-spot").trim();
+  if(g("sp-valve")!=null)o.valve=g("sp-valve");
+  if(g("sp-r")!=null)o.r=Math.max(1,num(g("sp-r"),20));
+  if(g("sp-w")!=null)o.w=Math.max(1,num(g("sp-w"),40));
+  if(g("sp-h")!=null)o.h=Math.max(1,num(g("sp-h"),30));
+  if(g("sp-a")!=null)o.angle=num(g("sp-a"),0)%360;
+  if(g("sp-rate")!=null)o.rate=Math.max(0.01,num(g("sp-rate"),0.3));
+  const c=document.getElementById("sp-cycle"); if(c)o.cycle=c.checked;
+  return o;
+}
+function buyCard(L){
+  if(!L)return "";
+  const g=grass(), bag=Math.max(500,num(state.settings.bagSqft,5000)), bags=Math.ceil(L/bag), rows=[];
+  if(g.seed)rows.push(["Overseed with "+g.name.toLowerCase(),g.seed+" lb per 1,000 sq ft",Math.ceil(L/1000*g.seed)+" lb"]);
+  else rows.push([g.name+" plugs or sod","Seed is slow and unreliable","Patch only"]);
+  rows.push(["Fertilizer","1 bag per "+fmtSq(bag)+" sq ft",bags+" bag"+(bags>1?"s":"")]);
+  rows.push(["Crabgrass pre-emergent","1 bag per "+fmtSq(bag)+" sq ft",bags+" bag"+(bags>1?"s":"")]);
+  return `<div class="sect">What to buy</div><section class="card">${rows.map(r=>`<div class="row between" style="align-items:baseline"><div class="grow"><div class="title">${esc(r[0])}</div><div class="sub">${esc(r[1])}</div></div><div class="num" style="font-weight:600">${esc(r[2])}</div></div>`).join("")}
+  <label class="f" for="bagsq">Bag coverage on your label (sq ft)<input id="bagsq" inputmode="numeric" data-act="bagsq" value="${bag}"></label></section>`;
+}
+
+/* ---------- backup ---------- */
+function exportBackup(){
+  try{
+    const blob=new Blob([JSON.stringify(state,null,1)],{type:"application/json"});
+    const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download="turf-backup-"+ymd(new Date())+".json";
+    document.body.appendChild(a); a.click(); setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},1000);
+    saveMsg="Backup exported."; const el=$("#save"); if(el)el.textContent=saveMsg;
+  }catch(_){saveMsg="Couldn't export a backup in this browser.";render();}
+}
+function importBackup(file){
+  const r=new FileReader();
+  r.onload=()=>{
+    try{const d=JSON.parse(r.result);if(!d||!Array.isArray(d.outline))throw 0;state=normalize(d);ui.edit=null;ui.sel=null;resetView=true;
+      if(state.setupDone){ui.tab="yard";location.hash="#yard";}else ui.step=state.center?"outline":"welcome";
+      saveMsg="Backup restored."; commit();}
+    catch(_){saveMsg="That file isn't a Turf backup.";render();}
+  };
+  r.readAsText(file);
+}
+
+/* ---------- events ---------- */
+function resetYardUi(){ui.sprMode=false;ui.pendingSpr=null;ui.sel=null;ui.confirm=null;}
+document.addEventListener("click",e=>{
+  const b=e.target.closest("[data-act]"); if(!b)return;
+  if(b.tagName==="INPUT"||b.tagName==="SELECT")return;
+  const a=b.dataset.act, id=b.dataset.id;
+  switch(a){
+    case "go": goStep(b.dataset.step); break;
+    case "locate":
+      if(!navigator.geolocation){ui.geo.error="Location isn't available in this browser.";render();break;}
+      ui.geo.loading=true;ui.geo.error="";render();
+      navigator.geolocation.getCurrentPosition(async pos=>{
+        const lat=pos.coords.latitude, lon=pos.coords.longitude; const label=await reverseGeocode(lat,lon);
+        ui.geo.loading=false; chooseAddress(label,lat,lon);
+      },()=>{ui.geo.loading=false;ui.geo.error="Couldn't get your location. Search by address instead.";render();},{enableHighAccuracy:true,timeout:15000});
+      break;
+    case "pickaddr": {const r=ui.geo.results[+b.dataset.i]; if(r)chooseAddress(r.label,r.lat,r.lon); break;}
+    case "outline-next": if(ui.edit&&ui.edit.pts.length>=3){state.outline=copyPts(ui.edit.pts);persist();gridCache.key="";goStep("features");} break;
+    case "ed-undo": if(ui.edit&&ui.edit.history.length){ui.edit.pts=ui.edit.history.pop();afterEdit();} break;
+    case "ed-clear": if(ui.edit&&ui.edit.pts.length){hist();ui.edit.pts=[];afterEdit();} break;
+    case "ed-cancel": ui.edit=null; resetView=true; render(); break;
+    case "ed-saveoutline": if(ui.edit&&ui.edit.pts.length>=3){state.outline=copyPts(ui.edit.pts);ui.edit=null;resetView=true;commit();} break;
+    case "ed-savefeat": {
+      const ed=ui.edit; if(!ed||ed.pts.length<3)break;
+      const nm=(($("#ed-name")||{}).value||"").trim()||(FEATURES[ed.kind]||FEATURES.other).label;
+      const f=state.features.find(x=>x.id===ed.id);
+      if(f){f.pts=copyPts(ed.pts);f.name=nm;}else state.features.push({id:ed.id,kind:ed.kind,name:nm,pts:copyPts(ed.pts)});
+      ui.edit=null; resetView=true; ui.sel=null; commit(); break;
+    }
+    case "addfeat": {
+      const k=b.dataset.kind, n=state.features.filter(f=>f.kind===k).length, lab=(FEATURES[k]||FEATURES.other).label;
+      startEdit("feature",{id:uid(),kind:k,name:n?lab+" "+(n+1):lab,isNew:true}); render(); window.scrollTo(0,0); break;
+    }
+    case "editfeat": {const f=state.features.find(x=>x.id===id); if(f){startEdit("feature",{id:f.id,kind:f.kind,name:f.name,pts:f.pts});render();window.scrollTo(0,0);} break;}
+    case "delfeat": ui.confirm="feat:"+id; render(); break;
+    case "delfeat2": state.features=state.features.filter(f=>f.id!==id); ui.confirm=null; ui.sel=null; commit(); break;
+    case "setupgrass": break;
+    case "finish": state.setupDone=true; ui.tab="yard"; resetView=true; ui.edit=null; if(location.hash!=="#yard")location.hash="#yard"; commit(); window.scrollTo(0,0); break;
+    case "editoutline": startEdit("outline",{pts:state.outline}); render(); window.scrollTo(0,0); break;
+    case "sprmode": ui.sprMode=b.dataset.on==="1"; ui.pendingSpr=null; ui.sel=null; ui.confirm=null; drawLayers(); refreshPanel(); refreshSeg(); break;
+    case "select": select(b.dataset.kind,id); {const m=$("#map"); if(m)m.scrollIntoView({block:"start",behavior:"smooth"});} break;
+    case "cancel": resetYardUi(); ui.confirm=null; if($("#panel")&&!ui.edit){drawLayers();refreshPanel();refreshSeg();}else render(); break;
+    case "delspr": ui.confirm="spr"; refreshPanel(); break;
+    case "delspr2": {const sid=ui.sel&&ui.sel.id; state.sprinklers=state.sprinklers.filter(s=>s.id!==sid); state.runs=state.runs.filter(r=>r.sid!==sid); resetYardUi(); commit(); break;}
+    case "delrain": state.rain=state.rain.filter(r=>r.id!==id); commit(); break;
+    case "delrun": state.runs=state.runs.filter(r=>r.id!==id); commit(); break;
+    case "tuna": ui.tuna=ui.tuna===id?null:id; render(); break;
+    case "export": exportBackup(); break;
+    case "fresh": ui.confirm="fresh"; render(); break;
+    case "fresh2": state=defaults(); ui=Object.assign(ui,{step:"welcome",edit:null,view:null,confirm:null,sel:null,sprMode:false,pendingSpr:null,geo:{q:"",results:[],loading:false,error:""}}); commit(); window.scrollTo(0,0); break;
+  }
+});
+document.addEventListener("change",e=>{
+  const t=e.target, a=t.dataset&&t.dataset.act; if(!a)return;
+  if(a==="task"){if(t.checked)state.done[t.dataset.key]=true;else delete state.done[t.dataset.key];commit();}
+  else if(a==="setupgrass"){state.settings.grass=t.value;persist();}
+  else if(a==="seedmode"){state.settings.seedUntil=t.checked?ymd(addDays(new Date(),21)):null;commit();}
+  else if(a==="seeduntil"){if(t.value){state.settings.seedUntil=t.value;commit();}}
+  else if(a==="grass"){state.settings.grass=t.value;commit();}
+  else if(a==="ff"||a==="lf"){if(t.value){const v=t.value.slice(5);if(a==="ff")state.settings.firstFrost=v;else state.settings.lastFrost=v;commit();}}
+  else if(a==="bagsq"){const n=num(t.value,5000);if(n>=500){state.settings.bagSqft=Math.round(n);commit();}}
+  else if(a==="sptype"){
+    if(ui.pendingSpr){Object.assign(ui.pendingSpr,readSprForm(),{type:t.value,rate:STYPES[t.value].rate});refreshPanel();}
+    else if(ui.sel){const s=state.sprinklers.find(x=>x.id===ui.sel.id);if(s){Object.assign(s,readSprForm(),{type:t.value});commit({noRender:true});drawLayers();refreshPanel();refreshStats();}}
+  }
+  else if(a==="import"){const f=t.files&&t.files[0];t.value="";if(f)importBackup(f);}
+});
+document.addEventListener("submit",async e=>{
+  const fm=e.target, kind=fm.dataset.form; if(!kind)return; e.preventDefault();
+  const v=id=>{const el=document.getElementById(id);return el?el.value:"";}, now=new Date();
+  if(kind==="geo"){
+    const q=v("geo-q").trim(); if(!q)return;
+    ui.geo={q,results:[],loading:true,error:""}; render();
+    const r=await geocode(q);
+    ui.geo.loading=false;
+    if(r===null)ui.geo.error="Address search isn't responding. Check your connection.";
+    else if(!r.length)ui.geo.error="No matches for that address.";
+    else ui.geo.results=r;
+    render();
+  }else if(kind==="quickrain"){
+    const fell=num(v("qr-in"),0), exp=v("qr-exp").trim();
+    if(fell>0)state.rain.push({id:uid(),date:ymd(now),in:Math.round(fell*100)/100});
+    state.settings.expRain=exp===""?null:{in:Math.max(0,num(exp,0)),on:ymd(now)};
+    commit();
+  }else if(kind==="rain"){
+    const n=num(v("rn-in"),0); if(n<=0){const el=$("#rn-in");if(el)el.focus();return;}
+    state.rain.push({id:uid(),date:v("rn-date")||ymd(now),in:Math.round(n*100)/100}); commit();
+  }else if(kind==="logrun"){
+    const sid=fm.dataset.sid, m=num(v("lr-"+sid),0); if(m<=0)return;
+    state.runs.push({id:uid(),date:ymd(now),sid,min:Math.round(m)}); commit();
+  }else if(kind==="tuna"){
+    const sid=fm.dataset.sid, mins=num(v("tu-min"),0), ds=v("tu-d").split(/[,\s]+/).map(Number).filter(x=>isFinite(x)&&x>0);
+    if(mins<=0||!ds.length){const el=$("#tu-d");if(el)el.focus();return;}
+    const avg=ds.reduce((a,b)=>a+b,0)/ds.length, rate=Math.round(avg/mins*60*100)/100, low=Math.min(...ds)/avg;
+    const s=state.sprinklers.find(x=>x.id===sid); if(s)s.rate=Math.max(0.01,rate);
+    ui.tuna=null; saveMsg="Rate set to "+fmtIn(rate)+" in/hr"+(low<0.6?". Uneven spray: the driest can got "+Math.round(low*100)+"% of the average.":"");
+    state.updatedAt=Date.now(); try{localStorage.setItem(KEY,JSON.stringify(state));}catch(_){} render();
+  }else if(kind==="spr"){
+    const o=readSprForm(); o.type=v("sp-type");
+    if(ui.pendingSpr){const p=ui.pendingSpr;
+      const s=Object.assign({id:uid(),valve:"A",type:"oscillating",r:20,w:40,h:30,angle:0,rate:0.3,cycle:false},o,{lat:p.lat,lon:p.lon});
+      if(!s.spot)s.spot="Spot "+(state.sprinklers.filter(q=>q.valve===s.valve).length+1);
+      state.sprinklers.push(s); ui.pendingSpr=null; ui.sprMode=false; ui.sel=null; commit();
+    }else if(ui.sel){const s=state.sprinklers.find(x=>x.id===ui.sel.id);if(s){Object.assign(s,o);if(!s.spot)s.spot="Spot";}ui.confirm=null;commit();}
+  }
+});
+function route(){
+  const h=(location.hash||"").replace("#",""), t=["today","water","calendar","yard"].includes(h)?h:"yard";
+  if(t!==ui.tab){ui.tab=t;ui.edit=null;resetView=true;ui.tuna=null;resetYardUi();}
+  render(); window.scrollTo(0,0);
+}
+window.addEventListener("hashchange",route);
+
+/* ---------- boot ---------- */
+{const h=(location.hash||"").replace("#","");if(["today","water","calendar","yard"].includes(h))ui.tab=h;}
+if(!state.setupDone&&state.center)goStep(state.outline.length>=3?"features":"outline");
+else render();
+if(!storageOk)saveMsg="";
+})();
+</script>
+</body>
+</html>

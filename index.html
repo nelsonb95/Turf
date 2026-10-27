@@ -96,6 +96,17 @@ input[type=checkbox],input[type=radio]{width:24px;height:24px;min-height:0;accen
 .seg button{flex:1;min-height:36px;border-radius:8px;background:transparent;font-size:13px;font-weight:600;padding:0 6px;color:var(--fg)}
 .seg button[aria-pressed="true"]{background:var(--card);box-shadow:0 1px 2px rgba(0,0,0,.15)}
 .check{display:flex;align-items:center;gap:12px;min-height:44px;cursor:pointer}
+.cal{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:2px}
+.dow{font-size:11px;font-weight:600;color:var(--muted);text-align:center;padding:2px 0 4px}
+button.day{min-height:60px;padding:4px 0;border-radius:10px;background:transparent;flex-direction:column;justify-content:flex-start;gap:3px;font-weight:500;color:var(--fg);min-width:0}
+button.day.out{opacity:.4}
+button.day.sel{background:var(--fill)}
+.day .dn{width:30px;height:30px;border-radius:15px;display:flex;align-items:center;justify-content:center;font-size:15px;font-variant-numeric:tabular-nums}
+.day.today .dn{background:var(--accent);color:var(--on-accent);font-weight:700}
+.day.sel .dn{font-weight:700}
+.dots{display:flex;gap:2px;height:6px;justify-content:center}
+.dots i{width:6px;height:6px;border-radius:3px;display:block}
+.marks{display:flex;gap:1px;height:10px;justify-content:center}
 .hint{font-size:13px;color:var(--muted);line-height:1.4;margin:0}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 .mapbox{width:100%;height:46vh;min-height:280px;border-radius:12px;overflow:hidden;background:#2b3326}
@@ -233,12 +244,12 @@ const copyPts=p=>p.map(q=>[q[0],q[1]]);
 function defaults(){
   return {v:2,setupDone:false,address:"",center:null,outline:[],features:[],
     settings:{grass:"fescue",firstFrost:"11-01",lastFrost:"04-10",bagSqft:5000,seedUntil:null,expRain:null},
-    sprinklers:[],rain:[],runs:[],done:{},updatedAt:0};
+    sprinklers:[],rain:[],runs:[],log:[],done:{},updatedAt:0};
 }
 function normalize(d){
   const s=Object.assign(defaults(),d||{});
   s.settings=Object.assign(defaults().settings,(d&&d.settings)||{});
-  ["outline","features","sprinklers","rain","runs"].forEach(k=>{if(!Array.isArray(s[k]))s[k]=[];});
+  ["outline","features","sprinklers","rain","runs","log"].forEach(k=>{if(!Array.isArray(s[k]))s[k]=[];});
   if(!s.done||typeof s.done!=="object")s.done={};
   return s;
 }
@@ -701,24 +712,93 @@ function tunaPanel(s){
 }
 
 /* ---------- calendar ---------- */
+const CAT={blade:"care",soiltest:"care",pre:"weed",timeron:"timer",springfert:"fert",weedspring:"weed",grub:"pest",mowhigh:"care",aerate:"care",
+  seed:"seed",fallfert:"fert",weedfall:"weed",leaves:"care",timeroff:"timer",winterizer:"fert",lastmow:"care",scalp:"care",fert1:"fert",fert2:"fert",stopfert:"fert",prefall:"weed"};
+const CATS={fert:{n:"Fertilize",c:"#34C759"},weed:{n:"Weeds",c:"#FF9F0A"},seed:{n:"Seed",c:"#30B0C7"},pest:{n:"Grubs",c:"#A2845E"},timer:{n:"Hose timer",c:"#0A84FF"},care:{n:"Upkeep",c:"#8E8E93"}};
+const LOGK={mowed:"Mowed",fertilized:"Fertilized",seeded:"Seeded",weed:"Weed control",aerated:"Aerated",note:"Note"};
+const MK={
+  run:'<svg width="10" height="10" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2s7 7.5 7 13a7 7 0 0 1-14 0C5 9.5 12 2 12 2z" fill="#0A84FF"/></svg>',
+  rain:'<svg width="10" height="10" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 15a5 5 0 0 1-.5-10 7 7 0 0 1 13 2A4 4 0 0 1 18 15z" fill="#64D2FF"/><path d="M8 19l-1 3M13 19l-1 3M18 19l-1 3" stroke="#64D2FF" stroke-width="2.5" stroke-linecap="round"/></svg>',
+  log:'<svg width="10" height="10" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12.5l5 5L20 6" fill="none" stroke="#34C759" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  frost:'<svg width="10" height="10" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2v20M3.3 7l17.4 10M3.3 17L20.7 7" stroke="#5AC8FA" stroke-width="3" stroke-linecap="round"/></svg>'
+};
+function tasksOn(d){const y=d.getFullYear();return tasks().map(t=>({t,w:taskWindow(t,y)})).filter(x=>d>=x.w.start&&d<=x.w.end);}
 function renderCalendar(){
-  const now=new Date(), m=now.getMonth(), y=now.getFullYear();
-  let h=header(grass().warm?"Warm-season grass":"Cool-season grass","Calendar");
-  h+=`<section class="card"><label class="f" for="grass">Grass type<select id="grass" data-act="grass">${Object.keys(GRASS).map(k=>`<option value="${k}" ${state.settings.grass===k?"selected":""}>${GRASS[k].name}</option>`).join("")}</select></label>
-  <div class="grid2"><label class="f" for="ff">Avg first frost<input type="date" id="ff" data-act="ff" value="${y}-${state.settings.firstFrost}"></label>
-  <label class="f" for="lf">Avg last frost<input type="date" id="lf" data-act="lf" value="${y}-${state.settings.lastFrost}"></label></div>
-  <p class="hint">Frost dates set when to pull and reconnect the hose timer. Your county extension office lists local averages.</p></section>`;
-  const seasons=[{n:"Winter",ms:[11,0,1],s:11},{n:"Spring",ms:[2,3,4],s:2},{n:"Summer",ms:[5,6,7],s:5},{n:"Fall",ms:[8,9,10],s:8}];
-  const cur=seasons.findIndex(s=>s.ms.includes(m));
-  const all=tasks().map(t=>({t,st:taskStatus(t,now)}));
-  [0,1,2,3].map(i=>seasons[(cur+i)%4]).forEach((se,i)=>{
-    const key=d=>((d.getMonth()-se.s+12)%12)*100+d.getDate();
-    const items=all.filter(x=>se.ms.includes(x.st.w.start.getMonth())).sort((a,b)=>key(a.st.w.start)-key(b.st.w.start));
-    if(!items.length)return;
-    h+=`<div class="sect">${se.n}${i===0?" · now":""}</div><section class="card list">`;
-    items.forEach(x=>{h+=taskRow(x.t,x.st);});
-    h+=`</section>`;
+  const td=dayOnly(new Date()), tdKey=ymd(td);
+  if(!ui.cal)ui.cal={y:td.getFullYear(),m:td.getMonth(),sel:tdKey};
+  const y=ui.cal.y, m=ui.cal.m, sel=ui.cal.sel;
+  const first=new Date(y,m,1), start=addDays(first,-first.getDay());
+  const marks={}; const mark=(d,k)=>{(marks[d]=marks[d]||{})[k]=true;};
+  state.rain.forEach(r=>mark(r.date,"rain")); state.runs.forEach(r=>mark(r.date,"run")); state.log.forEach(r=>mark(r.date,"log"));
+  const ff=ymd(mmdd(state.settings.firstFrost,y)), lf=ymd(mmdd(state.settings.lastFrost,y));
+  mark(ff,"frost"); mark(lf,"frost");
+
+  let h=header(grass().name,"Calendar");
+  h+=`<section class="card" style="padding:12px 8px 10px;gap:8px">
+  <div class="row between" style="padding:0 6px"><h2 style="font-size:20px">${["January","February","March","April","May","June","July","August","September","October","November","December"][m]} ${y}</h2>
+  <div class="row" style="gap:4px"><button class="small" data-act="caltoday" ${y===td.getFullYear()&&m===td.getMonth()&&sel===tdKey?"disabled":""}>Today</button>
+  <button class="small" data-act="calprev" aria-label="Previous month" style="width:40px;padding:0">‹</button><button class="small" data-act="calnext" aria-label="Next month" style="width:40px;padding:0">›</button></div></div>
+  <div class="cal">${["S","M","T","W","T","F","S"].map(x=>`<div class="dow" aria-hidden="true">${x}</div>`).join("")}`;
+  for(let i=0;i<42;i++){
+    const d=addDays(start,i); if(i>=35&&d.getMonth()!==m)break;
+    const key=ymd(d), ts=tasksOn(d), cats=[...new Set(ts.map(x=>CAT[x.t.id]||"care"))].slice(0,4), mk=marks[key]||{};
+    const cls=["day",d.getMonth()!==m?"out":"",key===tdKey?"today":"",key===sel?"sel":""].join(" ");
+    const al=WD[d.getDay()]+" "+fmtMD(d)+(ts.length?", "+ts.length+" lawn task"+(ts.length>1?"s":""):"")+(mk.run?", watered":"")+(mk.rain?", rain":"")+(mk.log?", logged work":"")+(mk.frost?", frost date":"");
+    h+=`<button class="${cls}" data-act="calday" data-date="${key}" aria-label="${esc(al)}" aria-pressed="${key===sel}"><span class="dn">${d.getDate()}</span><span class="dots">${cats.map(c=>`<i style="background:${CATS[c].c}"></i>`).join("")}</span><span class="marks">${mk.run?MK.run:""}${mk.rain?MK.rain:""}${mk.log?MK.log:""}${mk.frost?MK.frost:""}</span></button>`;
+  }
+  h+=`</div><div class="legend" style="padding:4px 6px 0">${Object.keys(CATS).map(c=>`<span><i style="background:${CATS[c].c};border-radius:50%"></i>${CATS[c].n}</span>`).join("")}<span>${MK.run}Watered</span><span>${MK.rain}Rain</span><span>${MK.log}Logged</span><span>${MK.frost}Frost</span></div></section>`;
+
+  h+=dayPanel(sel);
+
+  /* this month's task windows */
+  const mStart=first, mEnd=new Date(y,m+1,0);
+  const inMonth=tasks().map(t=>({t,w:taskWindow(t,y)})).filter(x=>x.w.start<=mEnd&&x.w.end>=mStart).sort((a,b)=>a.w.start-b.w.start);
+  h+=`<div class="sect">Lawn tasks in ${MON[m]}</div><section class="card list">`;
+  if(!inMonth.length)h+=`<div class="item"><div class="sub">Nothing scheduled this month.</div></div>`;
+  inMonth.forEach(x=>{
+    const done=!!state.done[x.t.id+":"+y], cat=CATS[CAT[x.t.id]||"care"];
+    const pill=done?'<span class="pill done">Done</span>':td>x.w.end?'<span class="pill missed">Passed</span>':td>=x.w.start?'<span class="pill now">Now</span>':`<span class="pill later">${daysBetween(td,x.w.start)>30?fmtMD(x.w.start):"In "+daysBetween(td,x.w.start)+"d"}</span>`;
+    const jump=ymd(x.w.start<mStart?mStart:x.w.start);
+    h+=`<button class="result" style="display:flex;gap:12px;align-items:center" data-act="calday" data-date="${jump}"><span class="swatch" style="background:${cat.c};border-radius:50%"></span><span class="grow"><span class="title" style="display:block${done?";color:var(--muted)":""}">${esc(x.t.title)}</span><span class="sub">${fmtMD(x.w.start)} to ${fmtMD(x.w.end)} · ${cat.n}</span></span>${pill}</button>`;
   });
+  h+=`</section>`;
+
+  h+=`<div class="sect">Calendar settings</div><section class="card"><label class="f" for="grass">Grass type<select id="grass" data-act="grass">${Object.keys(GRASS).map(k=>`<option value="${k}" ${state.settings.grass===k?"selected":""}>${GRASS[k].name}</option>`).join("")}</select></label>
+  <div class="grid2"><label class="f" for="ff">Avg first frost<input type="date" id="ff" data-act="ff" value="${td.getFullYear()}-${state.settings.firstFrost}"></label>
+  <label class="f" for="lf">Avg last frost<input type="date" id="lf" data-act="lf" value="${td.getFullYear()}-${state.settings.lastFrost}"></label></div>
+  <p class="hint">Frost dates set when to pull and reconnect the hose timer. Your county extension office lists local averages.</p></section>`;
+  return h;
+}
+function dayPanel(key){
+  const d=parseYmd(key), y=d.getFullYear(), ts=tasksOn(d), isToday=key===ymd(new Date());
+  let h=`<section class="card" id="daypanel"><div class="row between"><h2>${WD[d.getDay()]}, ${fmtMD(d)}</h2>${isToday?'<span class="pill now">Today</span>':""}</div>`;
+  if(key===ymd(mmdd(state.settings.firstFrost,y)))h+=`<div class="alert info">${I.snow}<div><b>Average first frost</b><span>Hose timer and hoses should be inside by now.</span></div></div>`;
+  if(key===ymd(mmdd(state.settings.lastFrost,y)))h+=`<div class="alert info">${I.snow}<div><b>Average last frost</b><span>Safe to reconnect the hose timer soon.</span></div></div>`;
+  if(ts.length){
+    h+=`<div class="sub" style="margin-bottom:-8px;font-weight:600">LAWN TASKS</div><div>`;
+    ts.forEach(({t,w})=>{
+      const k=t.id+":"+y, done=!!state.done[k], cat=CATS[CAT[t.id]||"care"], left=daysBetween(d,w.end), opened=daysBetween(w.start,d);
+      const pos=opened===0?"Window opens":left===0?"Last day":left+" day"+(left>1?"s":"")+" left";
+      const cid="dp-"+t.id;
+      h+=`<div class="item"><input type="checkbox" id="${cid}" data-act="task" data-key="${esc(k)}" ${done?"checked":""} aria-label="Mark ${esc(t.title)} done"><label for="${cid}" class="grow" style="cursor:pointer"><div class="title" style="display:flex;align-items:center;gap:8px${done?";color:var(--muted)":""}"><span class="swatch" style="background:${cat.c};border-radius:50%;width:10px;height:10px"></span>${esc(t.title)}</div><div class="sub">${esc(t.why)}</div><div class="sub" style="margin-top:2px">${fmtMD(w.start)} to ${fmtMD(w.end)} · ${pos}</div></label></div>`;
+    });
+    h+=`</div>`;
+  }else h+=`<p class="hint">No lawn tasks fall on this day.</p>`;
+
+  const rain=state.rain.filter(r=>r.date===key), runs=state.runs.filter(r=>r.date===key), logs=state.log.filter(r=>r.date===key);
+  if(rain.length||runs.length||logs.length){
+    h+=`<div class="sub" style="margin-bottom:-8px;font-weight:600">LOGGED</div><div>`;
+    rain.forEach(r=>{h+=`<div class="item"><span style="width:20px;display:flex;justify-content:center">${MK.rain}</span><div class="grow"><div class="title num">Rain · ${fmtIn(num(r.in,0))} in</div></div><button class="danger small" data-act="delrain" data-id="${esc(r.id)}">Delete</button></div>`;});
+    runs.forEach(r=>{const s=state.sprinklers.find(x=>x.id===r.sid);if(!s)return;
+      h+=`<div class="item"><span style="width:20px;display:flex;justify-content:center">${MK.run}</span><div class="grow"><div class="title">Valve ${esc(s.valve)} · ${esc(s.spot)}</div><div class="sub">${num(r.min,0)} min · ${fmtIn(num(r.min,0)*s.rate/60)} in</div></div><button class="danger small" data-act="delrun" data-id="${esc(r.id)}">Delete</button></div>`;});
+    logs.forEach(r=>{h+=`<div class="item"><span style="width:20px;display:flex;justify-content:center">${MK.log}</span><div class="grow"><div class="title">${esc(LOGK[r.kind]||"Note")}</div>${r.note?`<div class="sub">${esc(r.note)}</div>`:""}</div><button class="danger small" data-act="dellog" data-id="${esc(r.id)}">Delete</button></div>`;});
+    h+=`</div>`;
+  }
+  const rk=ui.clkind==="rain";
+  h+=`<form class="card" style="background:var(--fill);padding:12px;gap:10px" data-form="calog" data-date="${key}">
+  <div class="grid2"><label class="f" for="cl-kind">Log for this day<select id="cl-kind" data-act="clkind">${Object.keys(LOGK).map(k=>`<option value="${k}" ${ui.clkind===k?"selected":""}>${LOGK[k]}</option>`).join("")}<option value="rain" ${rk?"selected":""}>Rain</option></select></label>
+  <label class="f" for="cl-val"><span id="cl-lab">${rk?"Inches":"Note (optional)"}</span><input id="cl-val" ${rk?'inputmode="decimal" placeholder="0.25"':'placeholder="Back yard, 3 in"'}></label></div>
+  <button type="submit" class="primary">Add</button></form></section>`;
   return h;
 }
 
@@ -873,6 +953,12 @@ document.addEventListener("click",e=>{
     case "delspr2": {const sid=ui.sel&&ui.sel.id; state.sprinklers=state.sprinklers.filter(s=>s.id!==sid); state.runs=state.runs.filter(r=>r.sid!==sid); resetYardUi(); commit(); break;}
     case "delrain": state.rain=state.rain.filter(r=>r.id!==id); commit(); break;
     case "delrun": state.runs=state.runs.filter(r=>r.id!==id); commit(); break;
+    case "dellog": state.log=state.log.filter(r=>r.id!==id); commit(); break;
+    case "calprev": case "calnext": {const c=ui.cal; c.m+=a==="calnext"?1:-1; if(c.m<0){c.m=11;c.y--;} if(c.m>11){c.m=0;c.y++;}
+      const td=dayOnly(new Date()); c.sel=(c.y===td.getFullYear()&&c.m===td.getMonth())?ymd(td):ymd(new Date(c.y,c.m,1)); render(); break;}
+    case "caltoday": {const td=dayOnly(new Date()); ui.cal={y:td.getFullYear(),m:td.getMonth(),sel:ymd(td)}; render(); break;}
+    case "calday": {const d=parseYmd(b.dataset.date); ui.cal.sel=b.dataset.date; ui.cal.y=d.getFullYear(); ui.cal.m=d.getMonth(); render();
+      if(!b.classList.contains("day")){const p=$("#daypanel"); if(p)p.scrollIntoView({block:"start",behavior:"smooth"});} break;}
     case "tuna": ui.tuna=ui.tuna===id?null:id; render(); break;
     case "export": exportBackup(); break;
     case "fresh": ui.confirm="fresh"; render(); break;
@@ -882,6 +968,8 @@ document.addEventListener("click",e=>{
 document.addEventListener("change",e=>{
   const t=e.target, a=t.dataset&&t.dataset.act; if(!a)return;
   if(a==="task"){if(t.checked)state.done[t.dataset.key]=true;else delete state.done[t.dataset.key];commit();}
+  else if(a==="clkind"){ui.clkind=t.value;const r=t.value==="rain",lab=$("#cl-lab"),inp=$("#cl-val");
+    if(lab)lab.textContent=r?"Inches":"Note (optional)"; if(inp){inp.value="";inp.placeholder=r?"0.25":"Back yard, 3 in";inp.inputMode=r?"decimal":"text";}}
   else if(a==="setupgrass"){state.settings.grass=t.value;persist();}
   else if(a==="seedmode"){state.settings.seedUntil=t.checked?ymd(addDays(new Date(),21)):null;commit();}
   else if(a==="seeduntil"){if(t.value){state.settings.seedUntil=t.value;commit();}}
@@ -910,6 +998,11 @@ document.addEventListener("submit",async e=>{
     const fell=num(v("qr-in"),0), exp=v("qr-exp").trim();
     if(fell>0)state.rain.push({id:uid(),date:ymd(now),in:Math.round(fell*100)/100});
     state.settings.expRain=exp===""?null:{in:Math.max(0,num(exp,0)),on:ymd(now)};
+    commit();
+  }else if(kind==="calog"){
+    const date=fm.dataset.date, k=v("cl-kind"), val=v("cl-val").trim();
+    if(k==="rain"){const n=num(val,0); if(n<=0){const el=$("#cl-val");if(el)el.focus();return;} state.rain.push({id:uid(),date,in:Math.round(n*100)/100});}
+    else state.log.push({id:uid(),date,kind:k,note:val.slice(0,140)});
     commit();
   }else if(kind==="rain"){
     const n=num(v("rn-in"),0); if(n<=0){const el=$("#rn-in");if(el)el.focus();return;}
